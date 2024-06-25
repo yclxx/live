@@ -58,6 +58,21 @@ public class ProductLogServiceImpl implements IProductLogService {
     }
 
     /**
+     * 查询产品记录
+     *
+     * @param productCode 产品代码
+     * @return 产品记录
+     */
+    @Override
+    public ProductLogVo queryByProductCodeAndInfoDate(String productCode, String infoDate) {
+        LambdaQueryWrapper<ProductLog> lqw = Wrappers.lambdaQuery();
+        lqw.eq(ProductLog::getProductCode, productCode);
+        lqw.eq(ProductLog::getInfoDate, infoDate);
+        lqw.last("limit 1");
+        return baseMapper.selectVoOne(lqw);
+    }
+
+    /**
      * 分页查询产品记录列表
      *
      * @param bo        查询条件
@@ -116,8 +131,8 @@ public class ProductLogServiceImpl implements IProductLogService {
      * @return 是否新增成功
      */
     @Override
-    public Boolean insertBatch(List<ProductLog> bo) {
-        return baseMapper.insertBatch(bo);
+    public void insertBatch(List<ProductLog> bo) {
+        baseMapper.insertBatch(bo);
     }
 
     /**
@@ -167,11 +182,10 @@ public class ProductLogServiceImpl implements IProductLogService {
      * 校验并批量删除产品记录信息
      *
      * @param productCode 产品代码
-     * @return 是否删除成功
      */
     @Override
-    public Boolean deleteByProductCodeAndInfoDateLessThan(String productCode, String infoDate) {
-        return baseMapper.delete(Wrappers.<ProductLog>lambdaQuery().eq(ProductLog::getProductCode, productCode).lt(ProductLog::getInfoDate, infoDate)) > 0;
+    public void deleteByProductCodeAndInfoDateLessThan(String productCode, String infoDate) {
+        baseMapper.delete(Wrappers.<ProductLog>lambdaQuery().eq(ProductLog::getProductCode, productCode).lt(ProductLog::getInfoDate, infoDate));
     }
 
     @Override
@@ -205,6 +219,18 @@ public class ProductLogServiceImpl implements IProductLogService {
         LambdaQueryWrapper<ProductLog> infoDateLqw = Wrappers.lambdaQuery();
         infoDateLqw.gt(ProductLog::getInfoDate, infoDate);
         infoDateLqw.last("order by info_date asc limit 1");
+        ProductLogVo productLogVo = baseMapper.selectVoOne(infoDateLqw);
+        if (null == productLogVo) {
+            return null;
+        }
+        return productLogVo.getInfoDate();
+    }
+
+    @Override
+    public String queryFirstInfoDate(String infoDate) {
+        LambdaQueryWrapper<ProductLog> infoDateLqw = Wrappers.lambdaQuery();
+        infoDateLqw.lt(ProductLog::getInfoDate, infoDate);
+        infoDateLqw.last("order by info_date desc limit 1");
         ProductLogVo productLogVo = baseMapper.selectVoOne(infoDateLqw);
         if (null == productLogVo) {
             return null;
@@ -250,7 +276,7 @@ public class ProductLogServiceImpl implements IProductLogService {
     }
 
     @Override
-    public List<ProductLogVo> queryBy10000(String infoDate) {
+    public List<ProductLogVo> queryBy20001(String infoDate) {
         LambdaQueryWrapper<ProductLog> queryLqw = Wrappers.lambdaQuery();
         queryLqw.eq(ProductLog::getInfoDate, infoDate);
         queryLqw.gt(ProductLog::getMa20, 0);
@@ -261,12 +287,22 @@ public class ProductLogServiceImpl implements IProductLogService {
         return baseMapper.selectVoList(queryLqw);
     }
 
-    public List<ProductLogVo> queryBy10000AfterList(String infoDate, String productCode, int afterListCount) {
+    @Override
+    public List<ProductLogVo> queryBy20001AfterList(String infoDate, String productCode, int afterListCount) {
         LambdaQueryWrapper<ProductLog> queryLqw = Wrappers.lambdaQuery();
         queryLqw.lt(ProductLog::getInfoDate, infoDate);
         queryLqw.eq(ProductLog::getProductCode, productCode);
         queryLqw.last("order by info_date desc limit " + afterListCount);
 
         return baseMapper.selectVoList(queryLqw);
+    }
+
+    @Override
+    public List<ProductLogVo> queryBy20002(String infoDate) {
+        String nextInfoDate = queryFirstInfoDate(infoDate);
+        if (StringUtils.isBlank(nextInfoDate)) {
+            return new ArrayList<>();
+        }
+        return baseMapper.queryBy20002(infoDate, nextInfoDate);
     }
 }

@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 产品管理
@@ -58,23 +59,27 @@ public class ProductController extends BaseController {
     public TableDataInfo<ProductVo> list(ProductBo bo, PageQuery pageQuery) {
         TableDataInfo<ProductVo> productVoTableDataInfo = productService.queryPageList(bo, pageQuery);
         CountDownLatch countDownLatch = ThreadUtil.newCountDownLatch(productVoTableDataInfo.getRows().size());
-        ExecutorService executorService = ThreadUtil.newExecutor(5);
-        for (ProductVo productVo : productVoTableDataInfo.getRows()) {
-            if (!"0".equals(productVo.getProductType()) && !"1".equals(productVo.getProductType())) {
-                countDownLatch.countDown();
-                continue;
-            }
-            if (!"0".equals(productVo.getStatus())) {
-                countDownLatch.countDown();
-                continue;
-            }
-            executorService.submit(() -> {
-                List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productVo.getProductCode(), productVo.getProductName());
-                if (null != gpInfoVoList && !gpInfoVoList.isEmpty()) {
-                    productVo.setGpInfoVo(gpInfoVoList.getLast());
+        try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (ProductVo productVo : productVoTableDataInfo.getRows()) {
+                if (!"0".equals(productVo.getStatus())) {
+                    countDownLatch.countDown();
+                    continue;
                 }
-                countDownLatch.countDown();
-            });
+                if (!"0".equals(productVo.getProductType()) && !"1".equals(productVo.getProductType()) && !"2".equals(productVo.getProductType())) {
+                    countDownLatch.countDown();
+                    continue;
+                }
+                executorService.submit(() -> {
+                    try {
+                        List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productVo.getProductCode(), productVo.getProductName());
+                        if (null != gpInfoVoList && !gpInfoVoList.isEmpty()) {
+                            productVo.setGpInfoVo(gpInfoVoList.getLast());
+                        }
+                    } finally {
+                        countDownLatch.countDown();
+                    }
+                });
+            }
         }
         try {
             countDownLatch.await();

@@ -34,6 +34,14 @@ public interface IProductLogService {
     ProductLogVo queryLastByProductCode(String productCode);
 
     /**
+     * 查询产品记录
+     *
+     * @param productCode 产品代码
+     * @return 产品记录
+     */
+    ProductLogVo queryByProductCodeAndInfoDate(String productCode, String infoDate);
+
+    /**
      * 分页查询产品记录列表
      *
      * @param bo        查询条件
@@ -64,7 +72,7 @@ public interface IProductLogService {
      * @param bo 产品记录
      * @return 是否新增成功
      */
-    Boolean insertBatch(List<ProductLog> bo);
+    void insertBatch(List<ProductLog> bo);
 
     /**
      * 修改产品记录
@@ -95,9 +103,8 @@ public interface IProductLogService {
      * 校验并批量删除产品记录信息
      *
      * @param productCode 产品代码
-     * @return 是否删除成功
      */
-    Boolean deleteByProductCodeAndInfoDateLessThan(String productCode, String infoDate);
+    void deleteByProductCodeAndInfoDateLessThan(String productCode, String infoDate);
 
     /**
      * 获取开盘日期
@@ -142,7 +149,11 @@ public interface IProductLogService {
 
     String queryNextInfoDate(String infoDate);
 
-    List<ProductLogVo> queryBy10000(String infoDate);
+    String queryFirstInfoDate(String infoDate);
 
-    List<ProductLogVo> queryBy10000AfterList(String infoDate, String productCode, int afterListCount);
+    List<ProductLogVo> queryBy20001(String infoDate);
+
+    List<ProductLogVo> queryBy20001AfterList(String infoDate, String productCode, int afterListCount);
+
+    List<ProductLogVo> queryBy20002(String infoDate);
 }

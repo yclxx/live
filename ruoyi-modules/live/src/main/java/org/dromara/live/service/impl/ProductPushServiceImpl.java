@@ -2,7 +2,6 @@ package org.dromara.live.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.dromara.common.core.utils.DateUtils;
 import org.dromara.live.domain.bo.ProductActivityBo;
 import org.dromara.live.domain.vo.ProductActivityVo;
 import org.dromara.live.domain.vo.ProductLogVo;
@@ -28,9 +27,9 @@ public class ProductPushServiceImpl implements IProductPushService {
 
     @Override
     public void push20001(String infoDate) {
-        List<ProductLogVo> productLogVos = productLogService.queryBy10000(infoDate);
+        List<ProductLogVo> productLogVos = productLogService.queryBy20001(infoDate);
         for (ProductLogVo productLogVo : productLogVos) {
-            List<ProductLogVo> afterList = productLogService.queryBy10000AfterList(infoDate, productLogVo.getProductCode(), 20);
+            List<ProductLogVo> afterList = productLogService.queryBy20001AfterList(infoDate, productLogVo.getProductCode(), 20);
             if (afterList.size() < 20) {
                 continue;
             }

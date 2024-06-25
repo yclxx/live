@@ -165,4 +165,34 @@ public class DateUtils extends org.apache.commons.lang3.time.DateUtils {
         ZonedDateTime zdt = localDateTime.atZone(ZoneId.systemDefault());
         return Date.from(zdt.toInstant());
     }
+
+    /**
+     * 判断时间是否在13点30之前
+     *
+     * @param date 需要判断的时间
+     * @return true 在13点30之前，false 在13点30之后
+     */
+    public static boolean isBefore11(Date date) {
+        return isBefore(date, " 13:30:00");
+    }
+
+    /**
+     * 判断时间是否在13点30之前
+     *
+     * @param date 需要判断的时间
+     * @return true 在13点30之前，false 在13点30之后
+     */
+    public static boolean isBefore(Date date, String time) {
+        return date.before(DateUtils.parseDate(DateUtils.getDate() + " " + time));
+    }
+
+    /**
+     * 判断当前时间是否在输入时间之前
+     *
+     * @param time 需要判断的时间点 例如：13:30:00
+     * @return true 在13点30之前，false 在13点30之后
+     */
+    public static boolean isBefore(String time) {
+        return new Date().before(DateUtils.parseDate(DateUtils.getDate() + " " + time));
+    }
 }

@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper
-PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
-"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.dromara.live.mapper.ProductLogMapper">
 
+    <select id="queryBy20002" resultType="org.dromara.live.domain.vo.ProductLogVo">
+        select pl1.*
+        from live_product_log pl1
+                 left join live_product_log pl2
+                           on pl1.product_code = pl2.product_code and pl2.info_date = #{firstInfoDate}
+        where pl1.info_date = #{infoDate}
+          and pl1.ma5 &gt; pl1.ma20
+          and pl2.ma5 &lt; pl2.ma20
+    </select>
 </mapper>
