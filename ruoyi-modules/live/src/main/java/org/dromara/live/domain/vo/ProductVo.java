@@ -10,6 +10,7 @@ import lombok.Data;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.Date;
 
 /**
@@ -56,6 +57,15 @@ public class ProductVo implements Serializable {
      * 排序
      */
     private Long sort;
+
+    /**
+     * 总市值
+     */
+    private BigDecimal f116;
+    /**
+     * 流通市值
+     */
+    private BigDecimal f117;
 
     /**
      * 创建时间

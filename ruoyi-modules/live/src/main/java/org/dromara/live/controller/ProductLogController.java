@@ -3,6 +3,7 @@ package org.dromara.live.controller;
 import cn.dev33.satoken.annotation.SaCheckPermission;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.date.DateUtil;
+import cn.hutool.core.thread.ThreadUtil;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -101,66 +102,93 @@ public class ProductLogController extends BaseController {
             return R.fail("已经在执行中，不可重复执行");
         }
         RedisUtils.setCacheObject(cacheKey, DateUtil.now(), Duration.ofMinutes(3));
-        log.info("开始执行");
-        ProductBo productBo = new ProductBo();
-        productBo.setProductType("0,1");
-        productBo.setStatus("0");
-        List<ProductVo> productVos = productService.queryList(productBo);
-        // 获取产品记录
-        saveProductLog(productVos);
-        // 获取产品资金记录
-        saveProductMoneyLog(productVos);
+        log.info("开始时间：{}", DateUtil.now());
+        ThreadUtil.execAsync(() -> {
+            ProductBo productBo = new ProductBo();
+            productBo.setProductType("0,1");
+            productBo.setStatus("0");
+            List<ProductVo> productVos = productService.queryList(productBo);
+            try (ExecutorService es = Executors.newVirtualThreadPerTaskExecutor()) {
+                for (ProductVo productVo : productVos) {
+                    es.submit(() -> {
+                        // 获取产品记录
+                        saveProductLog(productVo);
+                    });
+                    es.submit(() -> {
+                        // 获取产品资金记录
+                        saveProductMoneyLog(productVo);
+                    });
+                    es.submit(() -> {
+                        // 更新产品市值
+                        updateProductMarketValue(productVo);
+                    });
+                }
+            }
+        });
         return R.ok();
+    }
+
+    /**
+     * 更新产品市值
+     *
+     * @param productVo 产品信息
+     */
+    private void updateProductMarketValue(final ProductVo productVo) {
+        // 异步执行
+        GpMarketValue gpMarketValue = LiveUtils.getGpMarketValue(productVo.getProductCode());
+        if (null == gpMarketValue) {
+            return;
+        }
+        // 并设置成停用状态
+        ProductBo pb = new ProductBo();
+        pb.setProductCode(productVo.getProductCode());
+        pb.setF116(gpMarketValue.getF116());
+        pb.setF117(gpMarketValue.getF117());
+        productService.updateByBo(pb);
     }
 
     /**
      * 获取产品记录
      *
-     * @param productVos 产品信息
+     * @param productVo 产品信息
      */
-    private void saveProductLog(List<ProductVo> productVos) {
+    private void saveProductLog(final ProductVo productVo) {
         // 异步执行
-        try (ExecutorService es = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (ProductVo productVo : productVos) {
-                es.submit(() -> {
-                    List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productVo.getProductCode(), productVo.getProductName());
-                    if (null == gpInfoVoList || gpInfoVoList.isEmpty()) {
-                        return;
-                    }
-                    GpInfoVo last = gpInfoVoList.getLast();
-                    if (LiveUtils.checkBase(last, 15)) {
-                        // 并设置成停用状态
-                        ProductBo pb = new ProductBo();
-                        pb.setProductCode(productVo.getProductCode());
-                        pb.setStatus("1");
-                        productService.updateByBo(pb);
-                        // 删除存储的数据
-                        productLogService.deleteByProductCode(productVo.getProductCode());
-                        return;
-                    }
-                    GpInfoVo first = gpInfoVoList.getFirst();
-                    // 删除日期小于first的数据
-                    productLogService.deleteByProductCodeAndInfoDateLessThan(productVo.getProductCode(), first.getInfoDate());
-                    ProductLogVo productLogVo = productLogService.queryLastByProductCode(productVo.getProductCode());
-                    if (null == productLogVo) {
-                        List<ProductLog> productLogs = BeanUtil.copyToList(gpInfoVoList, ProductLog.class);
-                        productLogService.insertBatch(productLogs);
-                    } else {
-                        for (int i = 1; i <= gpInfoVoList.size(); i++) {
-                            // 倒着取
-                            GpInfoVo gpInfoVo = gpInfoVoList.get(gpInfoVoList.size() - i);
-                            if (productLogVo.getInfoDate().equals(gpInfoVo.getInfoDate())) {
-                                ProductLogBo bean = BeanUtil.toBean(gpInfoVo, ProductLogBo.class);
-                                productLogService.updateByBo(bean);
-                                // 结束本层循环
-                                break;
-                            } else {
-                                ProductLogBo bean = BeanUtil.toBean(gpInfoVo, ProductLogBo.class);
-                                productLogService.insertByBo(bean);
-                            }
-                        }
-                    }
-                });
+        List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productVo.getProductCode(), productVo.getProductName());
+        if (null == gpInfoVoList || gpInfoVoList.isEmpty()) {
+            return;
+        }
+        GpInfoVo last = gpInfoVoList.getLast();
+        if (LiveUtils.checkBase(last, 15)) {
+            // 并设置成停用状态
+            ProductBo pb = new ProductBo();
+            pb.setProductCode(productVo.getProductCode());
+            pb.setStatus("1");
+            productService.updateByBo(pb);
+            // 删除存储的数据
+            productLogService.deleteByProductCode(productVo.getProductCode());
+            return;
+        }
+        GpInfoVo first = gpInfoVoList.getFirst();
+        // 删除日期小于first的数据
+        productLogService.deleteByProductCodeAndInfoDateLessThan(productVo.getProductCode(), first.getInfoDate());
+        ProductLogVo productLogVo = productLogService.queryLastByProductCode(productVo.getProductCode());
+        if (null == productLogVo) {
+            List<ProductLog> productLogs = BeanUtil.copyToList(gpInfoVoList, ProductLog.class);
+            productLogService.insertBatch(productLogs);
+        } else {
+            for (int i = 1; i <= gpInfoVoList.size(); i++) {
+                // 倒着取
+                GpInfoVo gpInfoVo = gpInfoVoList.get(gpInfoVoList.size() - i);
+                if (productLogVo.getInfoDate().equals(gpInfoVo.getInfoDate())) {
+                    ProductLogBo bean = BeanUtil.toBean(gpInfoVo, ProductLogBo.class);
+                    productLogService.updateByBo(bean);
+                    // 结束本层循环
+                    break;
+                } else {
+                    ProductLogBo bean = BeanUtil.toBean(gpInfoVo, ProductLogBo.class);
+                    productLogService.insertByBo(bean);
+                }
             }
         }
     }
@@ -168,40 +196,33 @@ public class ProductLogController extends BaseController {
     /**
      * 获取产品资金流向记录
      *
-     * @param productVos 产品信息
+     * @param productVo 产品信息
      */
-    private void saveProductMoneyLog(List<ProductVo> productVos) {
-        try (ExecutorService es = Executors.newVirtualThreadPerTaskExecutor()) {
-            // 异步执行
-            for (ProductVo productVo : productVos) {
-                es.submit(() -> {
-                    List<GpMoneyVo> gpInfoMoneyList = LiveUtils.getGpInfoMoneyList(productVo.getProductCode(), productVo.getProductName());
-                    if (null == gpInfoMoneyList || gpInfoMoneyList.isEmpty()) {
-                        return;
-                    }
-                    GpMoneyVo first = gpInfoMoneyList.getFirst();
-                    // 删除日期小于first的数据
-                    productMoneyLogService.deleteByProductCodeAndInfoDateLessThan(productVo.getProductCode(), first.getInfoDate());
-                    ProductMoneyLogVo productMoneyLogVo = productMoneyLogService.queryLastByProductCode(productVo.getProductCode());
-                    if (null == productMoneyLogVo) {
-                        List<ProductMoneyLog> productMoneyLogs = BeanUtil.copyToList(gpInfoMoneyList, ProductMoneyLog.class);
-                        productMoneyLogService.insertBatch(productMoneyLogs);
-                    } else {
-                        for (int i = 1; i <= gpInfoMoneyList.size(); i++) {
-                            // 倒着取
-                            GpMoneyVo gpMoneyVo = gpInfoMoneyList.get(gpInfoMoneyList.size() - i);
-                            if (productMoneyLogVo.getInfoDate().equals(gpMoneyVo.getInfoDate())) {
-                                ProductMoneyLogBo bean = BeanUtil.toBean(gpMoneyVo, ProductMoneyLogBo.class);
-                                productMoneyLogService.updateByBo(bean);
-                                // 结束本层循环
-                                break;
-                            } else {
-                                ProductMoneyLogBo bean = BeanUtil.toBean(gpMoneyVo, ProductMoneyLogBo.class);
-                                productMoneyLogService.insertByBo(bean);
-                            }
-                        }
-                    }
-                });
+    private void saveProductMoneyLog(final ProductVo productVo) {
+        List<GpMoneyVo> gpInfoMoneyList = LiveUtils.getGpInfoMoneyList(productVo.getProductCode(), productVo.getProductName());
+        if (null == gpInfoMoneyList || gpInfoMoneyList.isEmpty()) {
+            return;
+        }
+        GpMoneyVo first = gpInfoMoneyList.getFirst();
+        // 删除日期小于first的数据
+        productMoneyLogService.deleteByProductCodeAndInfoDateLessThan(productVo.getProductCode(), first.getInfoDate());
+        ProductMoneyLogVo productMoneyLogVo = productMoneyLogService.queryLastByProductCode(productVo.getProductCode());
+        if (null == productMoneyLogVo) {
+            List<ProductMoneyLog> productMoneyLogs = BeanUtil.copyToList(gpInfoMoneyList, ProductMoneyLog.class);
+            productMoneyLogService.insertBatch(productMoneyLogs);
+        } else {
+            for (int i = 1; i <= gpInfoMoneyList.size(); i++) {
+                // 倒着取
+                GpMoneyVo gpMoneyVo = gpInfoMoneyList.get(gpInfoMoneyList.size() - i);
+                if (productMoneyLogVo.getInfoDate().equals(gpMoneyVo.getInfoDate())) {
+                    ProductMoneyLogBo bean = BeanUtil.toBean(gpMoneyVo, ProductMoneyLogBo.class);
+                    productMoneyLogService.updateByBo(bean);
+                    // 结束本层循环
+                    break;
+                } else {
+                    ProductMoneyLogBo bean = BeanUtil.toBean(gpMoneyVo, ProductMoneyLogBo.class);
+                    productMoneyLogService.insertByBo(bean);
+                }
             }
         }
     }

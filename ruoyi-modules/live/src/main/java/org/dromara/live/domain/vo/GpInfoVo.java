@@ -1,7 +1,10 @@
 package org.dromara.live.domain.vo;
 
 import com.alibaba.excel.util.StringUtils;
+import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import org.dromara.common.mybatis.core.domain.BaseEntity;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -10,8 +13,11 @@ import java.util.List;
 /**
  * @author 25487
  */
+@EqualsAndHashCode(callSuper = true)
 @Data
-public class GpInfoVo {
+@AutoMapper(target = ProductLogVo.class, reverseConvertGenerate = false)
+public class GpInfoVo extends BaseEntity {
+
     private String id;
     /**
      * 产品代码

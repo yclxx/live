@@ -9,7 +9,6 @@ import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.domain.R;
-import org.dromara.common.core.utils.DateUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.excel.utils.ExcelUtil;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
@@ -20,22 +19,19 @@ import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.common.web.core.BaseController;
 import org.dromara.live.domain.bo.ProductActivityBo;
-import org.dromara.live.domain.bo.ProductBo;
 import org.dromara.live.domain.vo.GpInfoVo;
 import org.dromara.live.domain.vo.ProductActivityVo;
-import org.dromara.live.domain.vo.ProductVo;
 import org.dromara.live.service.IProductActivityService;
-import org.dromara.live.service.IProductLogService;
 import org.dromara.live.service.IProductPushService;
-import org.dromara.live.service.IProductService;
 import org.dromara.live.utils.LiveUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
-import java.math.BigDecimal;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 产品活动
@@ -51,8 +47,6 @@ import java.util.List;
 public class ProductActivityController extends BaseController {
 
     private final IProductActivityService productActivityService;
-    private final IProductService productService;
-    private final IProductLogService productLogService;
     private final IProductPushService productPushService;
 
     /**
@@ -61,7 +55,28 @@ public class ProductActivityController extends BaseController {
     @SaCheckPermission("live:productActivity:list")
     @GetMapping("/list")
     public TableDataInfo<ProductActivityVo> list(ProductActivityBo bo, PageQuery pageQuery) {
-        return productActivityService.queryPageList(bo, pageQuery);
+        TableDataInfo<ProductActivityVo> productActivityVoTableDataInfo = productActivityService.queryPageList(bo, pageQuery);
+        CountDownLatch countDownLatch = ThreadUtil.newCountDownLatch(productActivityVoTableDataInfo.getRows().size());
+        try (ExecutorService executorService = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (ProductActivityVo productActivityVo : productActivityVoTableDataInfo.getRows()) {
+                executorService.submit(() -> {
+                    try {
+                        List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productActivityVo.getProductCode(), productActivityVo.getProductName());
+                        if (null != gpInfoVoList && !gpInfoVoList.isEmpty()) {
+                            productActivityVo.setGpInfoVo(gpInfoVoList.getLast());
+                        }
+                    } finally {
+                        countDownLatch.countDown();
+                    }
+                });
+            }
+        }
+        try {
+            countDownLatch.await();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+        return productActivityVoTableDataInfo;
     }
 
     /**
@@ -104,72 +119,10 @@ public class ProductActivityController extends BaseController {
         log.info("开始执行");
         // 异步执行
         ThreadUtil.execAsync(() -> {
-            ProductBo productBo = new ProductBo();
-            productBo.setProductType("0,1");
-            productBo.setStatus("0");
-            List<ProductVo> productVos = productService.queryList(productBo);
-            List<GpInfoVo> gpWeightVoList = new ArrayList<>(productVos.size());
-            for (ProductVo productVo : productVos) {
-                List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productVo.getProductCode(), productVo.getProductName());
-                if (null == gpInfoVoList || gpInfoVoList.isEmpty()) {
-                    continue;
-                }
-                GpInfoVo gpInfoVo = gpInfoVoList.getLast();
-                if (LiveUtils.check10000(gpInfoVo)) {
-                    final long activityId = 10000;
-                    // 查询是否存在，存在则跳过，不存在则新增
-                    checkInsert(activityId, gpInfoVo);
-                }
-                if (LiveUtils.check10001(gpInfoVoList)) {
-                    final long activityId = 10001;
-                    // 查询是否存在，存在则跳过，不存在则新增
-                    checkInsert(activityId, gpInfoVo);
-                }
-                if (!LiveUtils.checkBase(gpInfoVo) && !LiveUtils.checkMa20(gpInfoVo, new BigDecimal("0.02"))) {
-                    int weight = LiveUtils.check10002(gpInfoVoList);
-                    gpInfoVo.setWeight(weight);
-                    gpWeightVoList.add(gpInfoVo);
-                }
-                if (LiveUtils.check10003(gpInfoVoList)) {
-                    final long activityId = 10003;
-                    // 查询是否存在，存在则跳过，不存在则新增
-                    checkInsert(activityId, gpInfoVo);
-                }
-            }
-            // 根据weight从大到小排序
-            gpWeightVoList.sort((o1, o2) -> o2.getWeight() - o1.getWeight());
-            // 取出排名前10的
-            gpWeightVoList.subList(0, 10).forEach(gpInfoVo -> {
-                // 查询是否存在，存在则跳过，不存在则新增
-                checkInsert(10002L, gpInfoVo);
-            });
+            productPushService.push10000(null);
             log.info("执行完成");
         });
-        // 异步执行 推荐任务2
-        ThreadUtil.execAsync(() -> {
-            // 查询
-            String infoDate = productLogService.queryLastInfoDate();
-            productPushService.push20001(infoDate);
-        });
         return R.ok();
-    }
-
-    private void checkInsert(Long activityId, GpInfoVo gpInfoVo) {
-        ProductActivityBo productActivityBo = getProductActivityBo(activityId, gpInfoVo);
-        ProductActivityVo productActivityVo = productActivityService.queryByProductCodeAndActivityId(productActivityBo);
-        if (null == productActivityVo) {
-            productActivityService.insertByBo(productActivityBo);
-        }
-    }
-
-    private static ProductActivityBo getProductActivityBo(long activityId, GpInfoVo gpInfoVo) {
-        ProductActivityBo productActivityBo = new ProductActivityBo();
-        productActivityBo.setProductCode(gpInfoVo.getProductCode());
-        productActivityBo.setProductName(gpInfoVo.getProductName());
-        productActivityBo.setActivityId(activityId);
-        productActivityBo.setProductDate(gpInfoVo.getInfoDate());
-        productActivityBo.setProductAmount(gpInfoVo.getF2());
-        return productActivityBo;
     }
 
     /**

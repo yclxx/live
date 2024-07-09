@@ -1,17 +1,18 @@
 package org.dromara.live.service.impl;
 
+import cn.hutool.core.date.DateUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.live.domain.bo.ProductActivityBo;
 import org.dromara.live.domain.vo.ProductActivityVo;
 import org.dromara.live.domain.vo.ProductLogVo;
 import org.dromara.live.service.IProductActivityService;
 import org.dromara.live.service.IProductLogService;
 import org.dromara.live.service.IProductPushService;
-import org.dromara.live.utils.LiveUtils;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -25,60 +26,37 @@ public class ProductPushServiceImpl implements IProductPushService {
     private final IProductActivityService productActivityService;
     private final IProductLogService productLogService;
 
+    /**
+     * 策略10000， 规则找出30天内涨停过的票，判断今天的价格是否在20日均线附近，且今天的20日均线大于涨停当天的20日均线
+     *
+     * @param infoDate 需要校验的日期
+     */
     @Override
-    public void push20001(String infoDate) {
-        List<ProductLogVo> productLogVos = productLogService.queryBy20001(infoDate);
+    public void push10000(String infoDate) {
+        Date date = new Date();
+        if (StringUtils.isNotBlank(infoDate)) {
+            date = DateUtil.parse(infoDate);
+        }
+        List<ProductLogVo> productLogVos = productLogService.queryActivity10000(date);
         for (ProductLogVo productLogVo : productLogVos) {
-            List<ProductLogVo> afterList = productLogService.queryBy20001AfterList(infoDate, productLogVo.getProductCode(), 20);
-            if (afterList.size() < 20) {
-                continue;
-            }
-            boolean tg = true;
-            for (ProductLogVo logVo : afterList) {
-                if (logVo.getF3().compareTo(new BigDecimal("9.5")) > 0) {
-                    tg = false;
-                    break;
+            try {
+                ProductLogVo logVo = productLogService.checkActivity10000(date, productLogVo.getProductCode(), productLogVo.getProductName());
+                if (null != logVo) {
+                    insertByProductLog(10000L, logVo);
                 }
+            } catch (Exception e) {
+                log.error("{}，获取异常", productLogVo.getProductName(), e);
+                throw new RuntimeException(e);
             }
-            if (tg) {
-                continue;
-            }
-            List<ProductLogVo> productLogVos1 = afterList.subList(0, 5);
-            boolean f3tg = false;
-            for (ProductLogVo logVo : productLogVos1) {
-                if (logVo.getF3().compareTo(new BigDecimal("3")) > 0 || !LiveUtils.checkMa20F16(logVo, new BigDecimal("0.01"))) {
-                    f3tg = true;
-                    break;
-                }
-            }
-            if (f3tg) {
-                continue;
-            }
-            int ma20_10count = 0;
-            int sz = 0;
-            BigDecimal f3add = new BigDecimal("0");
-            List<ProductLogVo> ma20_10 = afterList.subList(0, 10);
-            for (int i = 0; i < ma20_10.size(); i++) {
-                ProductLogVo logVo = ma20_10.get(i);
-                if (logVo.getF16().compareTo(logVo.getMa20()) < 0) {
-                    ma20_10count++;
-                }
-                if (i < 3 && logVo.getF3().compareTo(new BigDecimal("1")) > 0) {
-                    sz++;
-                }
-                if (i < 4 && logVo.getF3().compareTo(new BigDecimal("0")) > 0) {
-                    f3add = f3add.add(logVo.getF3());
-                }
-            }
-            if (ma20_10count > 4 || sz > 1 || f3add.compareTo(new BigDecimal("4")) > 0) {
-                continue;
-            }
-            // 新增
-            insertByProductLog(20001, productLogVo);
-            log.info("推荐任务2执行完成");
         }
     }
 
+    /**
+     * 新增推荐数据
+     *
+     * @param activityId   活动id
+     * @param productLogVo 产品
+     */
     private void insertByProductLog(long activityId, ProductLogVo productLogVo) {
         ProductActivityBo productActivityBo = new ProductActivityBo();
         productActivityBo.setProductCode(productLogVo.getProductCode());

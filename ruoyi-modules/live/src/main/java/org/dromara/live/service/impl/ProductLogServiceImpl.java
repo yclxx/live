@@ -1,5 +1,8 @@
 package org.dromara.live.service.impl;
 
+import cn.hutool.core.date.DatePattern;
+import cn.hutool.core.date.DateTime;
+import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -12,11 +15,14 @@ import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.live.domain.ProductLog;
 import org.dromara.live.domain.bo.ProductLogBo;
+import org.dromara.live.domain.vo.GpInfoVo;
 import org.dromara.live.domain.vo.ProductLogVo;
 import org.dromara.live.mapper.ProductLogMapper;
 import org.dromara.live.service.IProductLogService;
+import org.dromara.live.utils.LiveUtils;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.*;
 
 /**
@@ -304,5 +310,72 @@ public class ProductLogServiceImpl implements IProductLogService {
             return new ArrayList<>();
         }
         return baseMapper.queryBy20002(infoDate, nextInfoDate);
+    }
+
+    /**
+     * 查询30天前涨停过的票
+     *
+     * @param date 需要查询的日期，系统会自动计算前30天的数据, 为null时，默认为当前日期
+     * @return 符合条件的票
+     */
+    @Override
+    public List<ProductLogVo> queryActivity10000(Date date) {
+        if (null == date) {
+            date = new Date();
+        }
+        // 查询截止时间
+        String maxDate = DateUtil.format(date, DatePattern.NORM_DATE_PATTERN);
+        // 前30天
+        DateTime dateTime = DateUtil.offsetDay(date, -30);
+        String infoDate = DateUtil.format(dateTime, DatePattern.NORM_DATE_PATTERN);
+        LambdaQueryWrapper<ProductLog> queryLqw = Wrappers.lambdaQuery();
+        queryLqw.apply("f2 = f15");
+        queryLqw.gt(ProductLog::getF3, 9.5);
+        queryLqw.gt(ProductLog::getMa20, 0);
+        queryLqw.gt(ProductLog::getInfoDate, infoDate);
+        queryLqw.le(ProductLog::getInfoDate, maxDate);
+
+        return baseMapper.selectVoList(queryLqw);
+    }
+
+    /**
+     * 校验指定日期的数据是否在20日均线正负1.5%
+     *
+     * @param date 指定的日期，为null时，默认为当前日期
+     * @return true 符合条件，false 不符合条件
+     */
+    @Override
+    public ProductLogVo checkActivity10000(Date date, String productCode, String productName) {
+        if (null == date) {
+            date = new Date();
+        }
+        String infoDate = DateUtil.format(date, DatePattern.NORM_DATE_PATTERN);
+        // 判断是否是今天，如果是今天，则请求接口查询实时数据
+        if (infoDate.equals(DateUtil.today())) {
+            List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productCode, productName);
+            if (null == gpInfoVoList || gpInfoVoList.isEmpty()) {
+                return null;
+            }
+            GpInfoVo last = gpInfoVoList.getLast();
+            if (null == last.getMa20() || LiveUtils.checkMa20(last, new BigDecimal("0.015"))) {
+                return null;
+            }
+            if (last.getMa10().compareTo(last.getMa20()) < 0) {
+                return null;
+            }
+            if (last.getMa10().compareTo(last.getMa5()) < 0) {
+                return null;
+            }
+            return MapstructUtils.convert(last, ProductLogVo.class);
+        } else {
+            // 不是今天，查询数据库数据
+            LambdaQueryWrapper<ProductLog> queryLqw = Wrappers.lambdaQuery();
+            queryLqw.eq(ProductLog::getProductCode, productCode);
+            queryLqw.eq(ProductLog::getInfoDate, infoDate);
+            queryLqw.apply("ma10 > ma20");
+            queryLqw.apply("ma10 > ma5");
+            queryLqw.apply("abs((f2 - ma20) / ma20) < 0.015");
+            return baseMapper.selectVoOne(queryLqw);
+        }
     }
 }

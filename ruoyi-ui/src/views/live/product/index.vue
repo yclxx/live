@@ -77,9 +77,16 @@
         <el-table-column label="5日均价" align="center" prop="gpInfoVo.ma5" width="78" />
         <el-table-column label="10日均价" align="center" prop="gpInfoVo.ma10" width="78" />
         <el-table-column label="20日均价" align="center" prop="gpInfoVo.ma20" width="78" />
-        <el-table-column label="更新时间" align="center" prop="updateTime" width="180">
+        <el-table-column label="总市值" align="center" prop="f116" width="98" :show-overflow-tooltip="true">
           <template #default="scope">
-            <span>{{ parseTime(scope.row.updateTime) }}</span>
+            <span>{{ numToUnitNum(scope.row.f116) }}</span>
+            <span>{{ getUnit(scope.row.f116) }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="流通市值" align="center" prop="f117" width="98" :show-overflow-tooltip="true">
+          <template #default="scope">
+            <span>{{ numToUnitNum(scope.row.f117) }}</span>
+            <span>{{ getUnit(scope.row.f117) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="操作" align="center" class-name="small-padding fixed-width">

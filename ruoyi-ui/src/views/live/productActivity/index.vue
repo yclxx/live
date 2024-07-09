@@ -19,8 +19,8 @@
                 <el-option v-for="dict in live_query_type" :key="dict.value" :label="dict.label" :value="dict.value" />
               </el-select>
             </el-form-item>
-            <el-form-item label="创建时间" style="width: 308px">
-              <el-date-picker v-model="dateRangeCreateTime" value-format="YYYY-MM-DD HH:mm:ss" type="datetimerange"
+            <el-form-item label="推荐日期" style="width: 308px">
+              <el-date-picker v-model="dateRangeCreateTime" value-format="YYYY-MM-DD" type="daterange"
                 range-separator="-" start-placeholder="开始日期" end-placeholder="结束日期"
                 :default-time="[new Date(2000, 1, 1, 0, 0, 0), new Date(2000, 1, 1, 23, 59, 59)]" />
             </el-form-item>
@@ -62,23 +62,23 @@
         <el-table-column label="活动编号" align="center" prop="activityId" />
         <el-table-column label="产品代码" align="center" prop="productCode" />
         <el-table-column label="产品名称" align="center" prop="productName" />
+        <el-table-column label="最新价" align="center" prop="gpInfoVo.f2" width="68" />
+        <el-table-column label="涨跌幅" align="center" prop="gpInfoVo.f3" width="68" />
+        <el-table-column label="最高价" align="center" prop="gpInfoVo.f15" width="68" />
+        <el-table-column label="最低价" align="center" prop="gpInfoVo.f16" width="68" />
+        <el-table-column label="换手率" align="center" prop="gpInfoVo.f8" width="68" />
+        <el-table-column label="5日均价" align="center" prop="gpInfoVo.ma5" width="78" />
+        <el-table-column label="10日均价" align="center" prop="gpInfoVo.ma10" width="78" />
+        <el-table-column label="20日均价" align="center" prop="gpInfoVo.ma20" width="78" />
         <el-table-column label="入选价格" align="center" prop="productAmount" />
         <el-table-column label="当天价格" align="center" prop="productAmountNow" />
         <el-table-column label="1天价格" align="center" prop="productAmount1" />
         <el-table-column label="2天价格" align="center" prop="productAmount2" />
         <el-table-column label="3天价格" align="center" prop="productAmount3" />
-        <el-table-column label="推荐日期" align="center" prop="productDate" width="100" />
+        <el-table-column label="推荐日期" fixed="right" align="center" prop="productDate" width="100" />
         <el-table-column label="更新时间" align="center" prop="updateTime" width="180">
           <template #default="scope">
             <span>{{ parseTime(scope.row.updateTime) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
-          <template #default="scope">
-            <el-tooltip content="删除" placement="top">
-              <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)"
-                v-hasPermi="['live:productActivity:remove']"></el-button>
-            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>

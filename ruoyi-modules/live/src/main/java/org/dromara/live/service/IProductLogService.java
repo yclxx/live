@@ -7,6 +7,7 @@ import org.dromara.live.domain.bo.ProductLogBo;
 import org.dromara.live.domain.vo.ProductLogVo;
 
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -156,4 +157,20 @@ public interface IProductLogService {
     List<ProductLogVo> queryBy20001AfterList(String infoDate, String productCode, int afterListCount);
 
     List<ProductLogVo> queryBy20002(String infoDate);
+
+    /**
+     * 查询30天前涨停过的票
+     *
+     * @param date 需要查询的日期，系统会自动计算前30天的数据, 为null时，默认为当前日期
+     * @return 符合条件的票
+     */
+    List<ProductLogVo> queryActivity10000(Date date);
+
+    /**
+     * 校验指定日期的数据是否在20日均线正负1.5%
+     *
+     * @param date 指定的日期，为null时，默认为当前日期
+     * @return true 符合条件，false 不符合条件
+     */
+    ProductLogVo checkActivity10000(Date date, String productCode,String productName);
 }

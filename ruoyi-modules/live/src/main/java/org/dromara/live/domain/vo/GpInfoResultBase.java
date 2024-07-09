@@ -8,12 +8,12 @@ import lombok.Data;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @Data
-public class GpInfoResultAll {
+public class GpInfoResultBase<T> {
     private Long rc;
     private Long rt;
     private Long svr;
     private Long lt;
     private Long full;
     private String dlmkts;
-    private GpInfoResult data;
+    private T data;
 }

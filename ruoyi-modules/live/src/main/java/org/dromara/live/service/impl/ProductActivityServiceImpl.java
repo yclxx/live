@@ -105,7 +105,7 @@ public class ProductActivityServiceImpl implements IProductActivityService {
         lqw.like(StringUtils.isNotBlank(bo.getProductName()), ProductActivity::getProductName, bo.getProductName());
         lqw.eq(StringUtils.isNotBlank(bo.getProductDate()), ProductActivity::getProductDate, bo.getProductDate());
         lqw.between(params.get("beginCreateTime") != null && params.get("endCreateTime") != null,
-            ProductActivity::getCreateTime, params.get("beginCreateTime"), params.get("endCreateTime"));
+            ProductActivity::getProductDate, params.get("beginCreateTime"), params.get("endCreateTime"));
         // 该段代码需放置最后
         if (StringUtils.isNotBlank(bo.getQueryType())) {
             if ("1".equals(bo.getQueryType())) {

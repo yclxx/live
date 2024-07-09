@@ -23,6 +23,7 @@ import org.dromara.live.domain.Product;
 import org.dromara.live.domain.bo.ProductBo;
 import org.dromara.live.domain.vo.GpDayAllVo;
 import org.dromara.live.domain.vo.GpInfoVo;
+import org.dromara.live.domain.vo.GpMarketValue;
 import org.dromara.live.domain.vo.ProductVo;
 import org.dromara.live.service.IProductService;
 import org.dromara.live.utils.LiveUtils;
@@ -74,6 +75,12 @@ public class ProductController extends BaseController {
                         List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productVo.getProductCode(), productVo.getProductName());
                         if (null != gpInfoVoList && !gpInfoVoList.isEmpty()) {
                             productVo.setGpInfoVo(gpInfoVoList.getLast());
+                        }
+                        // 查询总市值
+                        GpMarketValue gpMarketValue = LiveUtils.getGpMarketValue(productVo.getProductCode());
+                        if (null != gpMarketValue) {
+                            productVo.setF116(gpMarketValue.getF116());
+                            productVo.setF117(gpMarketValue.getF117());
                         }
                     } finally {
                         countDownLatch.countDown();
