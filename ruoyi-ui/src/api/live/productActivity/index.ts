@@ -50,6 +50,18 @@ export const updateProductActivity = () => {
 };
 
 /**
+ * 修改产品活动
+ * @param data
+ */
+export const updateProductActivityForm = (data : ProductActivityForm) => {
+  return request({
+    url: '/live/productActivity/edit',
+    method: 'put',
+    data: data
+  });
+};
+
+/**
  * 删除产品活动
  * @param id
  */

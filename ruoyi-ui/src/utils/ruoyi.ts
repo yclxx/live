@@ -56,7 +56,7 @@ export const copyToClipboard = async (text ?: any, proxy ?: any) => {
  * 按数字大小转换为 万 或者 亿 为单位的数字
  * @param value 金额
  */
-export const numToUnitNum = (value : number, defaultFixed : number) => {
+export const numToUnitNum = (value : number, defaultFixed ?: number) => {
   if (!value) {
     return '0'
   }
@@ -77,7 +77,7 @@ export const numToUnitNum = (value : number, defaultFixed : number) => {
  * 通过数字获取到数字转换后的单位
  * @param value 金额
  */
-export const getUnit = (value : number, defaultUnit : string) => {
+export const getUnit = (value : number, defaultUnit ?: string) => {
   if (!value) {
     return ''
   }

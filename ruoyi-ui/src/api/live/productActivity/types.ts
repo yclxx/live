@@ -50,6 +50,11 @@ export interface ProductActivityVO {
   productAmount3 : number;
 
   /**
+   * 选择状态：1-选择，2-默认，3-丢弃
+   */
+  selectStatus ?: string;
+
+  /**
    * 创建时间
    */
   createTime : string;
@@ -112,6 +117,11 @@ export interface ProductActivityForm extends BaseEntity {
    */
   productAmount3 ?: number;
 
+  /**
+   * 选择状态：1-选择，2-默认，3-丢弃
+   */
+  selectStatus ?: string;
+
 }
 
 export interface ProductActivityQuery extends PageQuery {
@@ -145,6 +155,11 @@ export interface ProductActivityQuery extends PageQuery {
    * 创建时间
    */
   createTime ?: string;
+
+  /**
+   * 选择状态：1-选择，2-默认，3-丢弃
+   */
+  selectStatus ?: string;
 
   /**
    * 排序字段

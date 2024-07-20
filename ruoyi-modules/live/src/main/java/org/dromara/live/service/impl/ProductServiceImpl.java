@@ -75,6 +75,8 @@ public class ProductServiceImpl implements IProductService {
         lqw.like(StringUtils.isNotBlank(bo.getProductName()), Product::getProductName, bo.getProductName());
         lqw.eq(StringUtils.isNotBlank(bo.getStatus()), Product::getStatus, bo.getStatus());
         lqw.in(StringUtils.isNotBlank(bo.getProductType()), Product::getProductType, StringUtils.splitList(bo.getProductType()));
+        lqw.gt(null != params.get("minF116"), Product::getF116, params.get("minF116"));
+        lqw.lt(null != params.get("maxF116"), Product::getF116, params.get("maxF116"));
         return lqw;
     }
 
@@ -137,5 +139,19 @@ public class ProductServiceImpl implements IProductService {
             return 0L;
         }
         return productVo.getSort();
+    }
+
+    /**
+     * 查询产品记录遗漏的数据
+     *
+     * @return 产品记录
+     */
+    @Override
+    public List<ProductVo> querySupplementList(String notInSql) {
+        LambdaQueryWrapper<Product> lqw = Wrappers.lambdaQuery();
+        lqw.in(Product::getProductType, "0", "1");
+        lqw.eq(Product::getStatus, "0");
+        lqw.notInSql(Product::getProductCode, notInSql);
+        return baseMapper.selectVoList(lqw);
     }
 }

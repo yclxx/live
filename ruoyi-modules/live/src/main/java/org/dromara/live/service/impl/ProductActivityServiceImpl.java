@@ -12,6 +12,7 @@ import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.live.domain.ProductActivity;
 import org.dromara.live.domain.bo.ProductActivityBo;
 import org.dromara.live.domain.vo.ProductActivityVo;
+import org.dromara.live.domain.vo.ProductLogVo;
 import org.dromara.live.mapper.ProductActivityMapper;
 import org.dromara.live.service.IProductActivityService;
 import org.springframework.stereotype.Service;
@@ -104,6 +105,7 @@ public class ProductActivityServiceImpl implements IProductActivityService {
         lqw.eq(StringUtils.isNotBlank(bo.getProductCode()), ProductActivity::getProductCode, bo.getProductCode());
         lqw.like(StringUtils.isNotBlank(bo.getProductName()), ProductActivity::getProductName, bo.getProductName());
         lqw.eq(StringUtils.isNotBlank(bo.getProductDate()), ProductActivity::getProductDate, bo.getProductDate());
+        lqw.eq(StringUtils.isNotBlank(bo.getSelectStatus()), ProductActivity::getSelectStatus, bo.getSelectStatus());
         lqw.between(params.get("beginCreateTime") != null && params.get("endCreateTime") != null,
             ProductActivity::getProductDate, params.get("beginCreateTime"), params.get("endCreateTime"));
         // 该段代码需放置最后
@@ -167,5 +169,25 @@ public class ProductActivityServiceImpl implements IProductActivityService {
             //TODO 做一些业务上的校验,判断是否需要校验
         }
         return baseMapper.deleteBatchIds(ids) > 0;
+    }
+
+    /**
+     * 新增推荐数据
+     *
+     * @param activityId   活动id
+     * @param productLogVo 产品
+     */
+    @Override
+    public void insertByProductLog(long activityId, ProductLogVo productLogVo) {
+        ProductActivityBo productActivityBo = new ProductActivityBo();
+        productActivityBo.setProductCode(productLogVo.getProductCode());
+        productActivityBo.setProductName(productLogVo.getProductName());
+        productActivityBo.setActivityId(activityId);
+        productActivityBo.setProductDate(productLogVo.getInfoDate());
+        productActivityBo.setProductAmount(productLogVo.getF2());
+        ProductActivityVo productActivityVo = this.queryByProductCodeAndActivityId(productActivityBo);
+        if (null == productActivityVo) {
+            this.insertByBo(productActivityBo);
+        }
     }
 }

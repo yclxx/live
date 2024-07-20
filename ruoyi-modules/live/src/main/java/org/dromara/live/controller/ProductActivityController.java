@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.core.validate.EditGroup;
 import org.dromara.common.excel.utils.ExcelUtil;
 import org.dromara.common.idempotent.annotation.RepeatSubmit;
 import org.dromara.common.log.annotation.Log;
@@ -116,12 +117,7 @@ public class ProductActivityController extends BaseController {
             return R.fail("已经在执行中，不可重复执行");
         }
         RedisUtils.setCacheObject(cacheKey, DateUtil.now(), Duration.ofMinutes(3));
-        log.info("开始执行");
-        // 异步执行
-        ThreadUtil.execAsync(() -> {
-            productPushService.push10000(null);
-            log.info("执行完成");
-        });
+        productPushService.push();
         return R.ok();
     }
 
@@ -139,58 +135,20 @@ public class ProductActivityController extends BaseController {
             return R.fail("已经在执行中，不可重复执行");
         }
         RedisUtils.setCacheObject(cacheKey, DateUtil.now(), Duration.ofMinutes(1));
-        log.info("开始执行");
         // 异步执行
-        ThreadUtil.execAsync(() -> {
-            List<ProductActivityVo> productActivityVos = productActivityService.queryListByThreeDay();
-            for (ProductActivityVo productActivityVo : productActivityVos) {
-                List<String> gpInfo = LiveUtils.getGpInfoString(productActivityVo.getProductCode());
-                if (null == gpInfo || gpInfo.isEmpty()) {
-                    continue;
-                }
-                int index = -1;
-                for (int i = 0; i < gpInfo.size(); i++) {
-                    String s = gpInfo.get(i);
-                    if (s.contains(productActivityVo.getProductDate())) {
-                        index = i;
-                    }
-                }
-                if (index == -1) {
-                    continue;
-                }
-                ProductActivityBo productActivityBo = getProductActivityBo(productActivityVo, gpInfo, index);
-                productActivityService.updateByBo(productActivityBo);
-            }
-        });
+        productPushService.updateActivityAmount();
         return R.ok();
     }
 
-    private static ProductActivityBo getProductActivityBo(ProductActivityVo productActivityVo, List<String> gpInfo, int index) {
-        ProductActivityBo productActivityBo = new ProductActivityBo();
-        productActivityBo.setId(productActivityVo.getId());
-
-        String s = gpInfo.get(index);
-        GpInfoVo gpInfoVo = new GpInfoVo(s, productActivityVo.getProductCode(), productActivityVo.getProductName());
-        productActivityBo.setProductAmountNow(gpInfoVo.getF2());
-        // 后一条数据
-        if (index + 1 < gpInfo.size()) {
-            String s1 = gpInfo.get(index + 1);
-            GpInfoVo gpInfoVo1 = new GpInfoVo(s1, productActivityVo.getProductCode(), productActivityVo.getProductName());
-            productActivityBo.setProductAmount1(gpInfoVo1.getF2());
-        }
-        // 后第二条数据
-        if (index + 2 < gpInfo.size()) {
-            String s2 = gpInfo.get(index + 2);
-            GpInfoVo gpInfoVo2 = new GpInfoVo(s2, productActivityVo.getProductCode(), productActivityVo.getProductName());
-            productActivityBo.setProductAmount2(gpInfoVo2.getF2());
-        }
-        // 后第三条数据
-        if (index + 3 < gpInfo.size()) {
-            String s3 = gpInfo.get(index + 3);
-            GpInfoVo gpInfoVo3 = new GpInfoVo(s3, productActivityVo.getProductCode(), productActivityVo.getProductName());
-            productActivityBo.setProductAmount3(gpInfoVo3.getF2());
-        }
-        return productActivityBo;
+    /**
+     * 修改产品活动
+     */
+    @SaCheckPermission("live:productActivity:edit")
+    @Log(title = "产品活动", businessType = BusinessType.UPDATE)
+    @RepeatSubmit()
+    @PutMapping("/edit")
+    public R<Void> edit(@Validated(EditGroup.class) @RequestBody ProductActivityBo bo) {
+        return toAjax(productActivityService.updateByBo(bo));
     }
 
     /**

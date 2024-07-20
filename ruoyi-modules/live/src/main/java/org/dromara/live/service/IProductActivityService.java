@@ -4,6 +4,7 @@ import org.dromara.live.domain.vo.ProductActivityVo;
 import org.dromara.live.domain.bo.ProductActivityBo;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.mybatis.core.page.PageQuery;
+import org.dromara.live.domain.vo.ProductLogVo;
 
 import java.util.Collection;
 import java.util.List;
@@ -80,4 +81,12 @@ public interface IProductActivityService {
      * @return 是否删除成功
      */
     Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid);
+
+    /**
+     * 新增推荐数据
+     *
+     * @param activityId   活动id
+     * @param productLogVo 产品
+     */
+    void insertByProductLog(long activityId, ProductLogVo productLogVo);
 }

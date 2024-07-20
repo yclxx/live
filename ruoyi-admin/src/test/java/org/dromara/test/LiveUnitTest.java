@@ -1,8 +1,11 @@
 package org.dromara.test;
 
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.live.domain.vo.ActivityVo;
+import org.dromara.live.factory.StrategyFactory;
+import org.dromara.live.service.HandleStrategy;
+import org.dromara.live.service.IActivityService;
 import org.dromara.live.service.IProductLogService;
-import org.dromara.live.service.IProductPushService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,13 +26,26 @@ public class LiveUnitTest {
     @Autowired
     private IProductLogService productLogService;
     @Autowired
-    private IProductPushService productPushService;
+    private IActivityService activityService;
 
     @Test
     public void testTest() {
+        ActivityVo activityVo = activityService.queryById(10002L);
+//        // 获取策略类
+//        HandleStrategy instance = StrategyFactory.instance(activityVo.getClassName());
+//        // 执行策略
+//        instance.handlePush(activityVo.getActivityId(), "2024-07-14");
+
         List<String> infoDate = productLogService.queryInfoDate();
         for (String date : infoDate) {
-            productPushService.push10000(date);
+            try {
+                // 获取策略类
+                HandleStrategy instance = StrategyFactory.instance(activityVo.getClassName());
+                // 执行策略
+                instance.handlePush(activityVo.getActivityId(), date);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
         log.info("执行完成");
     }

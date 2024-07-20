@@ -6,6 +6,7 @@ import org.dromara.live.domain.ProductLog;
 import org.dromara.live.domain.bo.ProductLogBo;
 import org.dromara.live.domain.vo.ProductLogVo;
 
+import java.math.BigDecimal;
 import java.util.Collection;
 import java.util.Date;
 import java.util.List;
@@ -38,6 +39,7 @@ public interface IProductLogService {
      * 查询产品记录
      *
      * @param productCode 产品代码
+     * @param infoDate    日期
      * @return 产品记录
      */
     ProductLogVo queryByProductCodeAndInfoDate(String productCode, String infoDate);
@@ -71,7 +73,6 @@ public interface IProductLogService {
      * 新增产品记录
      *
      * @param bo 产品记录
-     * @return 是否新增成功
      */
     void insertBatch(List<ProductLog> bo);
 
@@ -96,9 +97,8 @@ public interface IProductLogService {
      * 校验并批量删除产品记录信息
      *
      * @param productCode 产品代码
-     * @return 是否删除成功
      */
-    Boolean deleteByProductCode(String productCode);
+    void deleteByProductCode(String productCode);
 
     /**
      * 校验并批量删除产品记录信息
@@ -139,24 +139,15 @@ public interface IProductLogService {
      */
     List<String> queryAnalyseVerify(String queryInfoDate, List<String> productCodeList);
 
-    /**
-     * 统计数据
-     *
-     * @param queryInfoDate   统计日期
-     * @param productCodeList 需要统计的产品代码
-     * @return 结果
-     */
-    List<ProductLogVo> queryListByProductCodeList(String queryInfoDate, List<String> productCodeList);
-
     String queryNextInfoDate(String infoDate);
 
+    /**
+     * 获取前一天交易日期
+     *
+     * @param infoDate 需要查询的日期
+     * @return 前一天交易日期
+     */
     String queryFirstInfoDate(String infoDate);
-
-    List<ProductLogVo> queryBy20001(String infoDate);
-
-    List<ProductLogVo> queryBy20001AfterList(String infoDate, String productCode, int afterListCount);
-
-    List<ProductLogVo> queryBy20002(String infoDate);
 
     /**
      * 查询30天前涨停过的票
@@ -172,5 +163,41 @@ public interface IProductLogService {
      * @param date 指定的日期，为null时，默认为当前日期
      * @return true 符合条件，false 不符合条件
      */
-    ProductLogVo checkActivity10000(Date date, String productCode,String productName);
+    ProductLogVo checkActivity10000(Date date, String productCode, String productName);
+
+    /**
+     * 校验指定日期的数据是否在20日均线正负1%
+     *
+     * @param date        指定的日期，为null时，默认为当前日期
+     * @param productCode 产品编号
+     * @param productName 产品名称
+     * @return true 符合条件，false 不符合条件
+     */
+    ProductLogVo checkMa20(Date date, String productCode, String productName);
+
+    /**
+     * 查询指定日期前指定天数的最高价最低价浮动比例
+     *
+     * @return 浮动比例
+     */
+    BigDecimal queryFloatByDays(String productCode, String infoDate, int days);
+
+    /**
+     * 查询指定日期前指定天数内的涨跌幅总和
+     *
+     * @param productCode 产品编号
+     * @param infoDate    日期
+     * @param days        指定天数
+     * @return 涨跌幅总和
+     */
+    BigDecimal sumDaysF3(String productCode, String infoDate, int days);
+
+    /**
+     * 查询指定日期 最低价在5日均线正负1%附近
+     *
+     * @param infoDate        需要查询的日期
+     * @param productCodeList 从指定的产品代码中查询，为空查询全部
+     * @return 产品代码
+     */
+    List<String> queryProductCodeByInfoDateAndF16(String infoDate, List<String> productCodeList);
 }

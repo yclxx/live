@@ -23,6 +23,7 @@ import org.dromara.live.utils.LiveUtils;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 
 /**
@@ -74,7 +75,7 @@ public class ProductLogServiceImpl implements IProductLogService {
         LambdaQueryWrapper<ProductLog> lqw = Wrappers.lambdaQuery();
         lqw.eq(ProductLog::getProductCode, productCode);
         lqw.eq(ProductLog::getInfoDate, infoDate);
-        lqw.last("limit 1");
+        lqw.last("order by info_date desc limit 1");
         return baseMapper.selectVoOne(lqw);
     }
 
@@ -122,7 +123,6 @@ public class ProductLogServiceImpl implements IProductLogService {
     @Override
     public Boolean insertByBo(ProductLogBo bo) {
         ProductLog add = MapstructUtils.convert(bo, ProductLog.class);
-        validEntityBeforeSave(add);
         boolean flag = baseMapper.insert(add) > 0;
         if (flag) {
             bo.setId(add.getId());
@@ -150,15 +150,7 @@ public class ProductLogServiceImpl implements IProductLogService {
     @Override
     public Boolean updateByBo(ProductLogBo bo) {
         ProductLog update = MapstructUtils.convert(bo, ProductLog.class);
-        validEntityBeforeSave(update);
         return baseMapper.updateById(update) > 0;
-    }
-
-    /**
-     * 保存前的数据校验
-     */
-    private void validEntityBeforeSave(ProductLog entity) {
-        //TODO 做一些数据校验,如唯一约束
     }
 
     /**
@@ -177,11 +169,10 @@ public class ProductLogServiceImpl implements IProductLogService {
      * 校验并批量删除产品记录信息
      *
      * @param productCode 产品代码
-     * @return 是否删除成功
      */
     @Override
-    public Boolean deleteByProductCode(String productCode) {
-        return baseMapper.delete(Wrappers.<ProductLog>lambdaQuery().eq(ProductLog::getProductCode, productCode)) > 0;
+    public void deleteByProductCode(String productCode) {
+        baseMapper.delete(Wrappers.<ProductLog>lambdaQuery().eq(ProductLog::getProductCode, productCode));
     }
 
     /**
@@ -270,48 +261,6 @@ public class ProductLogServiceImpl implements IProductLogService {
         return baseMapper.selectObjs(queryLqw);
     }
 
-    @Override
-    public List<ProductLogVo> queryListByProductCodeList(String queryInfoDate, List<String> productCodeList) {
-        if (StringUtils.isBlank(queryInfoDate) || ObjectUtil.isEmpty(productCodeList)) {
-            return new ArrayList<>();
-        }
-        LambdaQueryWrapper<ProductLog> queryLqw = Wrappers.lambdaQuery();
-        queryLqw.eq(ProductLog::getInfoDate, queryInfoDate);
-        queryLqw.in(ObjectUtil.isNotEmpty(productCodeList), ProductLog::getProductCode, productCodeList);
-        return baseMapper.selectVoList(queryLqw);
-    }
-
-    @Override
-    public List<ProductLogVo> queryBy20001(String infoDate) {
-        LambdaQueryWrapper<ProductLog> queryLqw = Wrappers.lambdaQuery();
-        queryLqw.eq(ProductLog::getInfoDate, infoDate);
-        queryLqw.gt(ProductLog::getMa20, 0);
-        queryLqw.lt(ProductLog::getF3, 1);
-        queryLqw.gt(ProductLog::getF3, -2);
-        queryLqw.apply("f6 >= 100000000 and (abs(f2-ma20) / f2) <= 0.005");
-
-        return baseMapper.selectVoList(queryLqw);
-    }
-
-    @Override
-    public List<ProductLogVo> queryBy20001AfterList(String infoDate, String productCode, int afterListCount) {
-        LambdaQueryWrapper<ProductLog> queryLqw = Wrappers.lambdaQuery();
-        queryLqw.lt(ProductLog::getInfoDate, infoDate);
-        queryLqw.eq(ProductLog::getProductCode, productCode);
-        queryLqw.last("order by info_date desc limit " + afterListCount);
-
-        return baseMapper.selectVoList(queryLqw);
-    }
-
-    @Override
-    public List<ProductLogVo> queryBy20002(String infoDate) {
-        String nextInfoDate = queryFirstInfoDate(infoDate);
-        if (StringUtils.isBlank(nextInfoDate)) {
-            return new ArrayList<>();
-        }
-        return baseMapper.queryBy20002(infoDate, nextInfoDate);
-    }
-
     /**
      * 查询30天前涨停过的票
      *
@@ -377,5 +326,93 @@ public class ProductLogServiceImpl implements IProductLogService {
             queryLqw.apply("abs((f2 - ma20) / ma20) < 0.015");
             return baseMapper.selectVoOne(queryLqw);
         }
+    }
+
+    /**
+     * 校验指定日期的数据是否在20日均线正负1%
+     *
+     * @param date 指定的日期，为null时，默认为当前日期
+     * @return true 符合条件，false 不符合条件
+     */
+    @Override
+    public ProductLogVo checkMa20(Date date, String productCode, String productName) {
+        BigDecimal ma20Ratio = new BigDecimal("0.01");
+        if (null == date) {
+            date = new Date();
+        }
+        String infoDate = DateUtil.format(date, DatePattern.NORM_DATE_PATTERN);
+        // 判断是否是今天，如果是今天，则请求接口查询实时数据
+        if (infoDate.equals(DateUtil.today())) {
+            List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productCode, productName);
+            if (null == gpInfoVoList || gpInfoVoList.isEmpty()) {
+                return null;
+            }
+            GpInfoVo last = gpInfoVoList.getLast();
+            if (null == last.getMa20() || LiveUtils.checkMa20(last, ma20Ratio)) {
+                return null;
+            }
+            return MapstructUtils.convert(last, ProductLogVo.class);
+        } else {
+            // 不是今天，查询数据库数据
+            LambdaQueryWrapper<ProductLog> queryLqw = Wrappers.lambdaQuery();
+            queryLqw.eq(ProductLog::getProductCode, productCode);
+            queryLqw.eq(ProductLog::getInfoDate, infoDate);
+            queryLqw.apply("abs((f2 - ma20) / ma20) < " + ma20Ratio);
+            return baseMapper.selectVoOne(queryLqw);
+        }
+    }
+
+    /**
+     * 查询指定日期前指定天数的最高价最低价浮动比例
+     *
+     * @return 浮动比例
+     */
+    @Override
+    public BigDecimal queryFloatByDays(String productCode, String infoDate, int days) {
+        List<BigDecimal> f2List = baseMapper.selectObjs(Wrappers.<ProductLog>lambdaQuery().select(ProductLog::getF2).eq(ProductLog::getProductCode, productCode).lt(ProductLog::getInfoDate, infoDate).last("order by info_date desc limit " + days));
+        if (f2List.size() != days) {
+            return new BigDecimal("0");
+        }
+        // 排序 从小到大
+        f2List.sort(Comparator.naturalOrder());
+        // 最大值减去最小值 除以最大值
+        BigDecimal subtract = f2List.getLast().subtract(f2List.getFirst());
+        return subtract.divide(f2List.getLast(), 4, RoundingMode.HALF_UP);
+    }
+
+    /**
+     * 查询指定日期前指定天数内的涨跌幅总和
+     *
+     * @param productCode 产品编号
+     * @param infoDate    日期
+     * @param days        指定天数
+     * @return 涨跌幅总和
+     */
+    @Override
+    public BigDecimal sumDaysF3(String productCode, String infoDate, int days) {
+        List<BigDecimal> f3List = baseMapper.selectObjs(Wrappers.<ProductLog>lambdaQuery().select(ProductLog::getF3).eq(ProductLog::getProductCode, productCode).lt(ProductLog::getInfoDate, infoDate).last("order by info_date desc limit " + days));
+        if (f3List.size() != days) {
+            return new BigDecimal("0");
+        }
+        // 求和
+        return f3List.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    /**
+     * 查询指定日期 最低价在5日均线正负1%附近
+     *
+     * @param infoDate        需要查询的日期
+     * @param productCodeList 从指定的产品代码中查询，为空查询全部
+     * @return 产品代码
+     */
+    @Override
+    public List<String> queryProductCodeByInfoDateAndF16(String infoDate, List<String> productCodeList) {
+        LambdaQueryWrapper<ProductLog> lqw = Wrappers.lambdaQuery();
+        lqw.select(ProductLog::getProductCode);
+        lqw.eq(ProductLog::getInfoDate, infoDate);
+        lqw.gt(ProductLog::getF6, new BigDecimal("100000000"));
+        lqw.in(ObjectUtil.isNotEmpty(productCodeList), ProductLog::getProductCode, productCodeList);
+        lqw.apply("abs((f16 - ma5) / ma5) < 0.01");
+        return baseMapper.selectObjs(lqw);
     }
 }

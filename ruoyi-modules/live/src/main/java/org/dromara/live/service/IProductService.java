@@ -46,7 +46,6 @@ public interface IProductService {
      * 新增产品管理
      *
      * @param productList 产品管理
-     * @return 是否新增成功
      */
     void insertByBo(List<Product> productList);
 
@@ -73,4 +72,11 @@ public interface IProductService {
      * @return 排序值
      */
     Long getMaxSort();
+
+    /**
+     * 查询产品记录遗漏的数据
+     *
+     * @return 产品记录
+     */
+    List<ProductVo> querySupplementList(String notInSql);
 }

@@ -172,12 +172,15 @@ public class LiveUtils {
     }
 
     public static void main(String[] args) {
-        String url = "https://push2.eastmoney.com/api/qt/stock/get?fields=f57,f58,f107,f600,f162,f163,f164,f167,f116,f117,f732,f741&secid=0.000001&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&cb=cbrnd_C43C7A8CA8FB487A8F96CCDC04D8C1A1";
-        String data = getDataString(url);
-        GpInfoResultBase<GpMarketValue> gpMarketValueResult = JsonUtils.parseObject(data, new TypeReference<>() {
-        });
-        // f116 总市值 f117 流通市值
-        log.info("返回结果：{}", gpMarketValueResult.getData());
+//        String url = "https://push2.eastmoney.com/api/qt/stock/get?fields=f57,f58,f107,f600,f162,f163,f164,f167,f116,f117,f732,f741&secid=0.000001&ut=bd1d9ddb04089700cf9c27f6f7426281&fltt=2&cb=cbrnd_C43C7A8CA8FB487A8F96CCDC04D8C1A1";
+//        String data = getDataString(url);
+//        GpInfoResultBase<GpMarketValue> gpMarketValueResult = JsonUtils.parseObject(data, new TypeReference<>() {
+//        });
+//        // f116 总市值 f117 流通市值
+//        log.info("返回结果：{}", gpMarketValueResult.getData());
+
+        List<GpInfoVo> gpInfoVoList = getGpInfoVoList("603501", "");
+        log.info("第一条{}", gpInfoVoList.getLast());
     }
 
     public static GpMarketValue getGpMarketValue(String code) {
@@ -283,12 +286,23 @@ public class LiveUtils {
      * @return true 校验不通过 false 校验通过
      */
     public static boolean checkBase(final GpInfoVo gpInfoVo, int days) {
-        // 校验时间不能和当天差值超过3天
-        int czDate = DateUtils.differentDaysByMillisecond(new Date(), DateUtils.parseDate(gpInfoVo.getInfoDate()));
-        if (czDate > days) {
+        if (checkDate(gpInfoVo, days)) {
             return true;
         }
         return null == gpInfoVo.getF2() || null == gpInfoVo.getMa20();
+    }
+
+    /**
+     * 校验最新成交时间不能和当前时间相差指定天数
+     *
+     * @param gpInfoVo 对象
+     * @param days     时间
+     * @return true 校验不通过 false 校验通过
+     */
+    public static boolean checkDate(final GpInfoVo gpInfoVo, int days) {
+        // 校验时间不能和当天差值超过3天
+        int czDate = DateUtils.differentDaysByMillisecond(new Date(), DateUtils.parseDate(gpInfoVo.getInfoDate()));
+        return czDate > days;
     }
 
     /**

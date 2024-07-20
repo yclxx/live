@@ -1,18 +1,22 @@
 package org.dromara.live.service.impl;
 
-import cn.hutool.core.date.DateUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.live.domain.bo.ActivityBo;
 import org.dromara.live.domain.bo.ProductActivityBo;
+import org.dromara.live.domain.vo.ActivityVo;
+import org.dromara.live.domain.vo.GpInfoVo;
 import org.dromara.live.domain.vo.ProductActivityVo;
-import org.dromara.live.domain.vo.ProductLogVo;
+import org.dromara.live.factory.StrategyFactory;
+import org.dromara.live.service.IActivityService;
 import org.dromara.live.service.IProductActivityService;
-import org.dromara.live.service.IProductLogService;
 import org.dromara.live.service.IProductPushService;
+import org.dromara.live.service.HandleStrategy;
+import org.dromara.live.utils.LiveUtils;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -24,49 +28,85 @@ import java.util.List;
 public class ProductPushServiceImpl implements IProductPushService {
 
     private final IProductActivityService productActivityService;
-    private final IProductLogService productLogService;
+    private final IActivityService activityService;
 
     /**
-     * 策略10000， 规则找出30天内涨停过的票，判断今天的价格是否在20日均线附近，且今天的20日均线大于涨停当天的20日均线
-     *
-     * @param infoDate 需要校验的日期
+     * 执行策略
      */
     @Override
-    public void push10000(String infoDate) {
-        Date date = new Date();
-        if (StringUtils.isNotBlank(infoDate)) {
-            date = DateUtil.parse(infoDate);
-        }
-        List<ProductLogVo> productLogVos = productLogService.queryActivity10000(date);
-        for (ProductLogVo productLogVo : productLogVos) {
+    public void push(){
+        ActivityBo queryBo = new ActivityBo();
+        queryBo.setStatus("0");
+        List<ActivityVo> activityVos = activityService.queryList(queryBo);
+        for (ActivityVo activityVo : activityVos) {
+            if (StringUtils.isBlank(activityVo.getClassName())) {
+                continue;
+            }
+            // 异步执行
             try {
-                ProductLogVo logVo = productLogService.checkActivity10000(date, productLogVo.getProductCode(), productLogVo.getProductName());
-                if (null != logVo) {
-                    insertByProductLog(10000L, logVo);
-                }
+                // 获取策略类
+                HandleStrategy instance = StrategyFactory.instance(activityVo.getClassName());
+                // 执行策略
+                instance.handlePush(activityVo.getActivityId(), null);
             } catch (Exception e) {
-                log.error("{}，获取异常", productLogVo.getProductName(), e);
                 throw new RuntimeException(e);
             }
         }
     }
 
     /**
-     * 新增推荐数据
-     *
-     * @param activityId   活动id
-     * @param productLogVo 产品
+     * 更新推荐产品价格
      */
-    private void insertByProductLog(long activityId, ProductLogVo productLogVo) {
-        ProductActivityBo productActivityBo = new ProductActivityBo();
-        productActivityBo.setProductCode(productLogVo.getProductCode());
-        productActivityBo.setProductName(productLogVo.getProductName());
-        productActivityBo.setActivityId(activityId);
-        productActivityBo.setProductDate(productLogVo.getInfoDate());
-        productActivityBo.setProductAmount(productLogVo.getF2());
-        ProductActivityVo productActivityVo = productActivityService.queryByProductCodeAndActivityId(productActivityBo);
-        if (null == productActivityVo) {
-            productActivityService.insertByBo(productActivityBo);
+    @Async
+    @Override
+    public void updateActivityAmount() {
+        List<ProductActivityVo> productActivityVos = productActivityService.queryListByThreeDay();
+        for (ProductActivityVo productActivityVo : productActivityVos) {
+            List<String> gpInfo = LiveUtils.getGpInfoString(productActivityVo.getProductCode());
+            if (null == gpInfo || gpInfo.isEmpty()) {
+                continue;
+            }
+            int index = -1;
+            for (int i = 0; i < gpInfo.size(); i++) {
+                String s = gpInfo.get(i);
+                if (s.contains(productActivityVo.getProductDate())) {
+                    index = i;
+                }
+            }
+            if (index == -1) {
+                continue;
+            }
+            ProductActivityBo productActivityBo = getProductActivityBo(productActivityVo, gpInfo, index);
+            productActivityService.updateByBo(productActivityBo);
         }
+        log.info("产品价格更新完成");
+    }
+
+    private ProductActivityBo getProductActivityBo(ProductActivityVo productActivityVo, List<String> gpInfo, int index) {
+        ProductActivityBo productActivityBo = new ProductActivityBo();
+        productActivityBo.setId(productActivityVo.getId());
+
+        String s = gpInfo.get(index);
+        GpInfoVo gpInfoVo = new GpInfoVo(s, productActivityVo.getProductCode(), productActivityVo.getProductName());
+        productActivityBo.setProductAmountNow(gpInfoVo.getF2());
+        // 后一条数据
+        if (index + 1 < gpInfo.size()) {
+            String s1 = gpInfo.get(index + 1);
+            GpInfoVo gpInfoVo1 = new GpInfoVo(s1, productActivityVo.getProductCode(), productActivityVo.getProductName());
+            productActivityBo.setProductAmount1(gpInfoVo1.getF2());
+        }
+        // 后第二条数据
+        if (index + 2 < gpInfo.size()) {
+            String s2 = gpInfo.get(index + 2);
+            GpInfoVo gpInfoVo2 = new GpInfoVo(s2, productActivityVo.getProductCode(), productActivityVo.getProductName());
+            productActivityBo.setProductAmount2(gpInfoVo2.getF2());
+        }
+        // 后第三条数据
+        if (index + 3 < gpInfo.size()) {
+            String s3 = gpInfo.get(index + 3);
+            GpInfoVo gpInfoVo3 = new GpInfoVo(s3, productActivityVo.getProductCode(), productActivityVo.getProductName());
+            productActivityBo.setProductAmount3(gpInfoVo3.getF2());
+        }
+        return productActivityBo;
     }
 }

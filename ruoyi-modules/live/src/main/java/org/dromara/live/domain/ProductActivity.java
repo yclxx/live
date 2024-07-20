@@ -73,5 +73,8 @@ public class ProductActivity extends TenantEntity {
      */
     private BigDecimal productAmount3;
 
-
+    /**
+     * 选择状态：1-选择，2-默认，3-丢弃
+     */
+    private String selectStatus;
 }

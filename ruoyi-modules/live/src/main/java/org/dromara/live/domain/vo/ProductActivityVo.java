@@ -1,16 +1,16 @@
 package org.dromara.live.domain.vo;
 
-import java.math.BigDecimal;
-import org.dromara.live.domain.ProductActivity;
 import com.alibaba.excel.annotation.ExcelIgnoreUnannotated;
 import com.alibaba.excel.annotation.ExcelProperty;
-import org.dromara.common.excel.annotation.ExcelDictFormat;
-import org.dromara.common.excel.convert.ExcelDictConvert;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
+import org.dromara.common.excel.annotation.ExcelDictFormat;
+import org.dromara.common.excel.convert.ExcelDictConvert;
+import org.dromara.live.domain.ProductActivity;
 
 import java.io.Serial;
 import java.io.Serializable;
+import java.math.BigDecimal;
 import java.util.Date;
 
 
@@ -100,6 +100,13 @@ public class ProductActivityVo implements Serializable {
      */
     @ExcelProperty(value = "更新时间")
     private Date updateTime;
+
+    /**
+     * 选择状态：1-选择，2-默认，3-丢弃
+     */
+    @ExcelProperty(value = "选择状态", converter = ExcelDictConvert.class)
+    @ExcelDictFormat(dictType = "live_select_status")
+    private String selectStatus;
 
     private GpInfoVo gpInfoVo;
 }

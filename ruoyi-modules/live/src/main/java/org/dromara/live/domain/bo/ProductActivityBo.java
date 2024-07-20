@@ -81,4 +81,9 @@ public class ProductActivityBo extends BaseEntity {
      * 查询条件
      */
     private String queryType;
+
+    /**
+     * 选择状态：1-选择，2-默认，3-丢弃
+     */
+    private String selectStatus;
 }
