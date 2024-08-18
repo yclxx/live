@@ -18,12 +18,18 @@ import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.redis.utils.RedisUtils;
+import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.common.web.core.BaseController;
 import org.dromara.live.domain.bo.ProductActivityBo;
+import org.dromara.live.domain.vo.ActivityVo;
 import org.dromara.live.domain.vo.GpInfoVo;
 import org.dromara.live.domain.vo.ProductActivityVo;
+import org.dromara.live.factory.StrategyFactory;
+import org.dromara.live.service.HandleStrategy;
+import org.dromara.live.service.IActivityService;
 import org.dromara.live.service.IProductActivityService;
 import org.dromara.live.service.IProductPushService;
+import org.dromara.live.service.strategy.Activity99999Strategy;
 import org.dromara.live.utils.LiveUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +39,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /**
  * 产品活动
@@ -49,6 +56,7 @@ public class ProductActivityController extends BaseController {
 
     private final IProductActivityService productActivityService;
     private final IProductPushService productPushService;
+    private final IActivityService activityService;
 
     /**
      * 查询产品活动列表
@@ -62,10 +70,7 @@ public class ProductActivityController extends BaseController {
             for (ProductActivityVo productActivityVo : productActivityVoTableDataInfo.getRows()) {
                 executorService.submit(() -> {
                     try {
-                        List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productActivityVo.getProductCode(), productActivityVo.getProductName());
-                        if (null != gpInfoVoList && !gpInfoVoList.isEmpty()) {
-                            productActivityVo.setGpInfoVo(gpInfoVoList.getLast());
-                        }
+                        this.setGpInfoVo(productActivityVo);
                     } finally {
                         countDownLatch.countDown();
                     }
@@ -101,6 +106,54 @@ public class ProductActivityController extends BaseController {
     public R<ProductActivityVo> getInfo(@NotNull(message = "主键不能为空")
                                         @PathVariable Long id) {
         return R.ok(productActivityService.queryById(id));
+    }
+
+    /**
+     * 获取今日幸运推荐
+     */
+    @SaCheckPermission("live:productActivity:lucky")
+    @GetMapping("/lucky")
+    public R<ProductActivityVo> lucky() {
+        long activityId = 99999;
+        ActivityVo activityVo = activityService.queryById(activityId);
+        try {
+            // 获取策略类
+            HandleStrategy instance = StrategyFactory.instance(activityVo.getClassName());
+            if (instance instanceof Activity99999Strategy strategy) {
+                String luckyKey = strategy.getLuckyKey();
+                Long id = RedisUtils.getCacheObject(luckyKey);
+                if (null == id) {
+                    Future<String> stringFuture = strategy.handlePush(TenantHelper.getTenantId(), activityId, null);
+                    String s = stringFuture.get();
+                    if (StringUtils.isNotBlank(s)) {
+                        id = RedisUtils.getCacheObject(luckyKey);
+                        if (null != id && id > 0) {
+                            ProductActivityVo productActivityVo = productActivityService.queryById(id);
+                            // 获取最新价
+                            this.setGpInfoVo(productActivityVo);
+                            return R.ok(productActivityVo);
+                        }
+                    }
+                } else if (id == -1) {
+                    return R.ok("操作成功", null);
+                } else {
+                    ProductActivityVo productActivityVo = productActivityService.queryById(id);
+                    // 获取最新价
+                    this.setGpInfoVo(productActivityVo);
+                    return R.ok(productActivityVo);
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        return R.ok("操作成功", null);
+    }
+
+    private void setGpInfoVo(ProductActivityVo productActivityVo) {
+        List<GpInfoVo> gpInfoVoList = LiveUtils.getGpInfoVoList(productActivityVo.getProductCode(), productActivityVo.getProductName());
+        if (null != gpInfoVoList && !gpInfoVoList.isEmpty()) {
+            productActivityVo.setGpInfoVo(gpInfoVoList.getLast());
+        }
     }
 
     /**

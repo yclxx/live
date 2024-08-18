@@ -13,21 +13,22 @@ import org.dromara.live.service.IProductLogService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 
 /**
- * 策略10002， 持续上涨，并且每天最低点在5日均线附近（正负1%）
+ * 策略10003， 持续放量上涨
  *
  * @author xiexi
  * @description
  * @date 2024/7/14 17:05
  */
 @Slf4j
-@Service("Activity10002Strategy")
+@Service("Activity10003Strategy")
 @RequiredArgsConstructor
-public class Activity10002Strategy implements HandleStrategy {
+public class Activity10003Strategy implements HandleStrategy {
 
     private final IProductLogService productLogService;
     private final IProductActivityService productActivityService;
@@ -36,38 +37,44 @@ public class Activity10002Strategy implements HandleStrategy {
     @Override
     public Future<String> handlePush(String tenantId, Long activityId, String pushInfoDate) {
         TenantHelper.dynamic(tenantId, () -> {
-            this.handle(activityId, pushInfoDate);
+            String queryDate = pushInfoDate;
+            if (StringUtils.isBlank(queryDate)) {
+                queryDate = DateUtil.today();
+            }
+            String infoDate = queryDate;
+            // 查询涨幅没超过5%的票
+            List<ProductLogVo> productLogVos = productLogService.queryListByInfoDate(infoDate);
+            for (ProductLogVo productLogVo : productLogVos) {
+                // 校验并添加
+                this.checkAndInsert(activityId, productLogVo);
+            }
         });
         log.info("策略{}执行完成", activityId);
         return CompletableFuture.completedFuture("执行完成");
     }
 
-    private void handle(Long activityId, String queryDate) {
-        if (StringUtils.isBlank(queryDate)) {
-            queryDate = DateUtil.today();
-        }
-        String infoDate = queryDate;
-        List<String> productCodeList = productLogService.queryProductCodeByInfoDateAndF16(infoDate, null);
-        if (ObjectUtil.isEmpty(productCodeList)) {
+    private void checkAndInsert(Long activityId, ProductLogVo productLogVo) {
+        int days = 5;
+        // 查询前5个交易日的日期
+        List<ProductLogVo> logVos = productLogService.queryBeforeInfoDate(productLogVo.getProductCode(), productLogVo.getInfoDate(), days);
+        if (ObjectUtil.isEmpty(logVos)) {
             return;
         }
-        for (int i = 0; i < 4; i++) {
-            // 查询前一天
-            infoDate = productLogService.queryFirstInfoDate(infoDate);
-            if (null == infoDate) {
+        Long f5 = productLogVo.getF5();
+        int count = 0;
+        for (ProductLogVo logVo : logVos) {
+            // 如果涨幅超过5%，则剔除
+            if (logVo.getF3().compareTo(new BigDecimal("5")) > 0) {
                 return;
             }
-            // 查询前一天数据
-            productCodeList = productLogService.queryProductCodeByInfoDateAndF16(infoDate, productCodeList);
-            if (ObjectUtil.isEmpty(productCodeList)) {
+            // 如果成交量一天比一天放大则选中
+            if (f5.compareTo(logVo.getF5()) < 0) {
                 return;
             }
+            f5 = logVo.getF5();
+            count++;
         }
-        for (String productCode : productCodeList) {
-            ProductLogVo productLogVo = productLogService.queryByProductCodeAndInfoDate(productCode, queryDate);
-            if (null == productLogVo) {
-                continue;
-            }
+        if (count >= days) {
             productActivityService.insertByProductLog(activityId, productLogVo);
         }
     }

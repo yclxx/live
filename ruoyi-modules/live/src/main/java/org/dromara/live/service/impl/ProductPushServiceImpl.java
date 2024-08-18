@@ -34,7 +34,7 @@ public class ProductPushServiceImpl implements IProductPushService {
      * 执行策略
      */
     @Override
-    public void push(){
+    public void push() {
         ActivityBo queryBo = new ActivityBo();
         queryBo.setStatus("0");
         List<ActivityVo> activityVos = activityService.queryList(queryBo);
@@ -47,7 +47,7 @@ public class ProductPushServiceImpl implements IProductPushService {
                 // 获取策略类
                 HandleStrategy instance = StrategyFactory.instance(activityVo.getClassName());
                 // 执行策略
-                instance.handlePush(activityVo.getActivityId(), null);
+                instance.handlePush(activityVo.getTenantId(), activityVo.getActivityId(), null);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

@@ -200,4 +200,22 @@ public interface IProductLogService {
      * @return 产品代码
      */
     List<String> queryProductCodeByInfoDateAndF16(String infoDate, List<String> productCodeList);
+
+    /**
+     * 查询指定天数前的交易数据
+     *
+     * @param productCode 产品编号
+     * @param infoDate    指定日期
+     * @param days        指定天数
+     * @return 交易数据
+     */
+    List<ProductLogVo> queryBeforeInfoDate(String productCode, String infoDate, int days);
+
+    /**
+     * 查询当天涨幅低于5%的票
+     *
+     * @param infoDate 指定日期
+     * @return 交易数据
+     */
+    List<ProductLogVo> queryListByInfoDate(String infoDate);
 }

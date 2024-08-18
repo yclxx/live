@@ -1,5 +1,7 @@
 package org.dromara.live.service;
 
+import java.util.concurrent.Future;
+
 /**
  * 策略类
  *
@@ -13,5 +15,5 @@ public interface HandleStrategy {
      * @param activityId 活动id
      * @param infoDate   需要推荐的日期
      */
-    void handlePush(Long activityId, String infoDate);
+    Future<String> handlePush(String tenantId, Long activityId, String infoDate);
 }

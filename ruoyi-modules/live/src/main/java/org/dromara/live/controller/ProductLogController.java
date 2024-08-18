@@ -50,6 +50,15 @@ public class ProductLogController extends BaseController {
     }
 
     /**
+     * 查询最新的交易日期
+     */
+    @SaCheckPermission("live:productLog:list")
+    @GetMapping("/lastDate")
+    public R<String> lastDate() {
+        return R.ok("操作成功", productLogService.queryLastInfoDate());
+    }
+
+    /**
      * 导出产品记录列表
      */
     @SaCheckPermission("live:productLog:export")

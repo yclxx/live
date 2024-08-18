@@ -134,7 +134,6 @@ public class ProductLogServiceImpl implements IProductLogService {
      * 新增产品记录
      *
      * @param bo 产品记录
-     * @return 是否新增成功
      */
     @Override
     public void insertBatch(List<ProductLog> bo) {
@@ -288,7 +287,7 @@ public class ProductLogServiceImpl implements IProductLogService {
     }
 
     /**
-     * 校验指定日期的数据是否在20日均线正负1.5%
+     * 校验指定日期的数据是否在20日均线正负1%
      *
      * @param date 指定的日期，为null时，默认为当前日期
      * @return true 符合条件，false 不符合条件
@@ -306,7 +305,7 @@ public class ProductLogServiceImpl implements IProductLogService {
                 return null;
             }
             GpInfoVo last = gpInfoVoList.getLast();
-            if (null == last.getMa20() || LiveUtils.checkMa20(last, new BigDecimal("0.015"))) {
+            if (null == last.getMa20() || LiveUtils.checkMa20(last, new BigDecimal("0.01"))) {
                 return null;
             }
             if (last.getMa10().compareTo(last.getMa20()) < 0) {
@@ -323,7 +322,7 @@ public class ProductLogServiceImpl implements IProductLogService {
             queryLqw.eq(ProductLog::getInfoDate, infoDate);
             queryLqw.apply("ma10 > ma20");
             queryLqw.apply("ma10 > ma5");
-            queryLqw.apply("abs((f2 - ma20) / ma20) < 0.015");
+            queryLqw.apply("abs((f2 - ma20) / ma20) < 0.01");
             return baseMapper.selectVoOne(queryLqw);
         }
     }
@@ -414,5 +413,37 @@ public class ProductLogServiceImpl implements IProductLogService {
         lqw.in(ObjectUtil.isNotEmpty(productCodeList), ProductLog::getProductCode, productCodeList);
         lqw.apply("abs((f16 - ma5) / ma5) < 0.01");
         return baseMapper.selectObjs(lqw);
+    }
+
+    /**
+     * 查询指定天数前的交易数据
+     *
+     * @param productCode 产品编号
+     * @param infoDate    指定日期
+     * @param days        指定天数
+     * @return 交易数据
+     */
+    @Override
+    public List<ProductLogVo> queryBeforeInfoDate(String productCode, String infoDate, int days) {
+        LambdaQueryWrapper<ProductLog> lqw = Wrappers.lambdaQuery();
+        lqw.lt(ProductLog::getInfoDate, infoDate);
+        lqw.eq(ProductLog::getProductCode, productCode);
+        lqw.last("order by info_date desc limit " + days);
+        return baseMapper.selectVoList(lqw);
+    }
+
+    /**
+     * 查询当天涨幅低于5%的票
+     *
+     * @param infoDate 指定日期
+     * @return 交易数据
+     */
+    @Override
+    public List<ProductLogVo> queryListByInfoDate(String infoDate) {
+        LambdaQueryWrapper<ProductLog> lqw = Wrappers.lambdaQuery();
+        lqw.eq(ProductLog::getInfoDate, infoDate);
+        lqw.gt(ProductLog::getF3, new BigDecimal("0"));
+        lqw.lt(ProductLog::getF3, new BigDecimal("5"));
+        return baseMapper.selectVoList(lqw);
     }
 }

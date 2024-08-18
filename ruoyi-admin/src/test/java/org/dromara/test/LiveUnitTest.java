@@ -30,11 +30,11 @@ public class LiveUnitTest {
 
     @Test
     public void testTest() {
-        ActivityVo activityVo = activityService.queryById(10002L);
+        ActivityVo activityVo = activityService.queryById(10003L);
 //        // 获取策略类
 //        HandleStrategy instance = StrategyFactory.instance(activityVo.getClassName());
-//        // 执行策略
-//        instance.handlePush(activityVo.getActivityId(), "2024-07-14");
+////        // 执行策略
+//        instance.handlePush(activityVo.getActivityId(), "2024-07-12");
 
         List<String> infoDate = productLogService.queryInfoDate();
         for (String date : infoDate) {
@@ -42,7 +42,7 @@ public class LiveUnitTest {
                 // 获取策略类
                 HandleStrategy instance = StrategyFactory.instance(activityVo.getClassName());
                 // 执行策略
-                instance.handlePush(activityVo.getActivityId(), date);
+                instance.handlePush(activityVo.getTenantId(), activityVo.getActivityId(), date);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }

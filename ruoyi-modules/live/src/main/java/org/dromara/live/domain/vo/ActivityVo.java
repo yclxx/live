@@ -1,12 +1,14 @@
 package org.dromara.live.domain.vo;
 
-import org.dromara.live.domain.Activity;
 import com.alibaba.excel.annotation.ExcelIgnoreUnannotated;
 import com.alibaba.excel.annotation.ExcelProperty;
-import org.dromara.common.excel.annotation.ExcelDictFormat;
-import org.dromara.common.excel.convert.ExcelDictConvert;
 import io.github.linpeilie.annotations.AutoMapper;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
+import org.dromara.common.excel.annotation.ExcelDictFormat;
+import org.dromara.common.excel.convert.ExcelDictConvert;
+import org.dromara.common.tenant.core.TenantEntity;
+import org.dromara.live.domain.Activity;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -20,10 +22,11 @@ import java.util.Date;
  * @author xx
  * @date 2024-07-14
  */
+@EqualsAndHashCode(callSuper = true)
 @Data
 @ExcelIgnoreUnannotated
 @AutoMapper(target = Activity.class)
-public class ActivityVo implements Serializable {
+public class ActivityVo extends TenantEntity implements Serializable {
 
     @Serial
     private static final long serialVersionUID = 1L;
