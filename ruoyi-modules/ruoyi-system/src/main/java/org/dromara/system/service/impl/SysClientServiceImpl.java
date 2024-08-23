@@ -134,7 +134,7 @@ public class SysClientServiceImpl implements ISysClientService {
      * 保存前的数据校验
      */
     private void validEntityBeforeSave(SysClient entity) {
-        //TODO 做一些数据校验,如唯一约束
+        // 做一些数据校验,如唯一约束
     }
 
     /**
@@ -144,7 +144,7 @@ public class SysClientServiceImpl implements ISysClientService {
     @Override
     public Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid) {
         if (isValid) {
-            //TODO 做一些业务上的校验,判断是否需要校验
+            // 做一些业务上的校验,判断是否需要校验
         }
         return baseMapper.deleteBatchIds(ids) > 0;
     }

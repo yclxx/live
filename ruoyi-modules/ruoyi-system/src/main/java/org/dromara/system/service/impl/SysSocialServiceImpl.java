@@ -85,7 +85,7 @@ public class SysSocialServiceImpl implements ISysSocialService {
      * 保存前的数据校验
      */
     private void validEntityBeforeSave(SysSocial entity) {
-        //TODO 做一些数据校验,如唯一约束
+        // 做一些数据校验,如唯一约束
     }
 
 
