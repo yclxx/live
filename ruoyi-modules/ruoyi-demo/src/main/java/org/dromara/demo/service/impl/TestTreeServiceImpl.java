@@ -75,14 +75,14 @@ public class TestTreeServiceImpl implements ITestTreeService {
      * @param entity 实体类数据
      */
     private void validEntityBeforeSave(TestTree entity) {
-        // 做一些数据校验,如唯一约束
+        //TODO 做一些数据校验,如唯一约束
     }
 
     @Override
     public Boolean deleteWithValidByIds(Collection<Long> ids, Boolean isValid) {
         if (isValid) {
-            // 做一些业务上的校验,判断是否需要校验
+            //TODO 做一些业务上的校验,判断是否需要校验
         }
-        return baseMapper.deleteBatchIds(ids) > 0;
+        return baseMapper.deleteByIds(ids) > 0;
     }
 }

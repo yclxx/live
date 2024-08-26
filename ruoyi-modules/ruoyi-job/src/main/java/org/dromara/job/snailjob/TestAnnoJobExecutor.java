@@ -8,7 +8,6 @@ import com.aizuda.snailjob.common.log.SnailJobLog;
 import org.springframework.stereotype.Component;
 
 /**
- * 注解定时任务测试 @JobExecutor注解模式: 支持无参和JobArgs参数，同时可作用于类和方法上，作用与类上时可以指定方法名称
  * @author opensnail
  * @date 2024-05-17
  */

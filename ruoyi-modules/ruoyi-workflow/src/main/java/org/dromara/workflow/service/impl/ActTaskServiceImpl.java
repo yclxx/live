@@ -7,9 +7,11 @@ import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.domain.dto.RoleDTO;
 import org.dromara.common.core.domain.dto.UserDTO;
 import org.dromara.common.core.exception.ServiceException;
+import org.dromara.common.core.service.OssService;
 import org.dromara.common.core.service.UserService;
 import org.dromara.common.core.utils.StreamUtils;
 import org.dromara.common.core.utils.StringUtils;
@@ -18,16 +20,14 @@ import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.satoken.utils.LoginHelper;
 import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.workflow.common.constant.FlowConstant;
-import org.dromara.workflow.common.enums.BusinessStatusEnum;
+import org.dromara.common.core.enums.BusinessStatusEnum;
 import org.dromara.workflow.common.enums.TaskStatusEnum;
 import org.dromara.workflow.domain.ActHiTaskinst;
 import org.dromara.workflow.domain.WfTaskBackNode;
 import org.dromara.workflow.domain.bo.*;
 import org.dromara.workflow.domain.vo.*;
 import org.dromara.workflow.flowable.cmd.*;
-import org.dromara.workflow.flowable.strategy.FlowEventStrategy;
-import org.dromara.workflow.flowable.strategy.FlowProcessEventHandler;
-import org.dromara.workflow.flowable.strategy.FlowTaskEventHandler;
+import org.dromara.workflow.flowable.handler.FlowProcessEventHandler;
 import org.dromara.workflow.mapper.ActHiTaskinstMapper;
 import org.dromara.workflow.mapper.ActTaskMapper;
 import org.dromara.workflow.service.IActTaskService;
@@ -66,6 +66,7 @@ import static org.dromara.workflow.common.constant.FlowConstant.*;
  *
  * @author may
  */
+@Slf4j
 @RequiredArgsConstructor
 @Service
 public class ActTaskServiceImpl implements IActTaskService {
@@ -75,13 +76,14 @@ public class ActTaskServiceImpl implements IActTaskService {
     private final HistoryService historyService;
     private final IdentityService identityService;
     private final ManagementService managementService;
-    private final FlowEventStrategy flowEventStrategy;
     private final ActTaskMapper actTaskMapper;
     private final IWfTaskBackNodeService wfTaskBackNodeService;
     private final ActHiTaskinstMapper actHiTaskinstMapper;
     private final IWfNodeConfigService wfNodeConfigService;
     private final IWfDefinitionConfigService wfDefinitionConfigService;
+    private final FlowProcessEventHandler flowProcessEventHandler;
     private final UserService userService;
+    private final OssService ossService;
 
     /**
      * 启动任务
@@ -159,15 +161,8 @@ public class ActTaskServiceImpl implements IActTaskService {
     @Transactional(rollbackFor = Exception.class)
     public boolean completeTask(CompleteTaskBo completeTaskBo) {
         try {
-            List<RoleDTO> roles = LoginHelper.getLoginUser().getRoles();
             String userId = String.valueOf(LoginHelper.getUserId());
-            TaskQuery taskQuery = QueryUtils.taskQuery();
-            taskQuery.taskId(completeTaskBo.getTaskId()).taskCandidateOrAssigned(userId);
-            if (CollUtil.isNotEmpty(roles)) {
-                List<String> groupIds = StreamUtils.toList(roles, e -> String.valueOf(e.getRoleId()));
-                taskQuery.taskCandidateGroupIn(groupIds);
-            }
-            Task task = taskQuery.singleResult();
+            Task task = WorkflowUtils.getTaskByCurrentUser(completeTaskBo.getTaskId());
             if (task == null) {
                 throw new ServiceException(FlowConstant.MESSAGE_CURRENT_TASK_IS_NULL);
             }
@@ -184,21 +179,17 @@ public class ActTaskServiceImpl implements IActTaskService {
                 return true;
             }
             //附件上传
-            AttachmentCmd attachmentCmd = new AttachmentCmd(completeTaskBo.getFileId(), task.getId(), task.getProcessInstanceId());
+            AttachmentCmd attachmentCmd = new AttachmentCmd(completeTaskBo.getFileId(), task.getId(), task.getProcessInstanceId(), ossService);
             managementService.executeCommand(attachmentCmd);
-            FlowProcessEventHandler processHandler = flowEventStrategy.getProcessHandler(processInstance.getProcessDefinitionKey());
-            String businessStatus = WorkflowUtils.getBusinessStatus(task.getProcessInstanceId());
+            String businessStatus = WorkflowUtils.getBusinessStatus(processInstance.getBusinessKey());
+            //流程提交监听
             if (BusinessStatusEnum.DRAFT.getStatus().equals(businessStatus) || BusinessStatusEnum.BACK.getStatus().equals(businessStatus) || BusinessStatusEnum.CANCEL.getStatus().equals(businessStatus)) {
-                if (processHandler != null) {
-                    processHandler.handleProcess(processInstance.getBusinessKey(), businessStatus, true);
-                }
+                flowProcessEventHandler.processHandler(processInstance.getProcessDefinitionKey(), processInstance.getBusinessKey(), businessStatus, true);
             }
             runtimeService.updateBusinessStatus(task.getProcessInstanceId(), BusinessStatusEnum.WAITING.getStatus());
-            String key = processInstance.getProcessDefinitionKey() + "_" + task.getTaskDefinitionKey();
-            FlowTaskEventHandler taskHandler = flowEventStrategy.getTaskHandler(key);
-            if (taskHandler != null) {
-                taskHandler.handleTask(task.getId(), processInstance.getBusinessKey());
-            }
+            //办理监听
+            flowProcessEventHandler.processTaskHandler(processInstance.getProcessDefinitionKey(), task.getTaskDefinitionKey(),
+                task.getId(), processInstance.getBusinessKey());
             //办理意见
             taskService.addComment(completeTaskBo.getTaskId(), task.getProcessInstanceId(), TaskStatusEnum.PASS.getStatus(), StringUtils.isBlank(completeTaskBo.getMessage()) ? "同意" : completeTaskBo.getMessage());
             //办理任务
@@ -214,9 +205,8 @@ public class ActTaskServiceImpl implements IActTaskService {
             if (pi == null) {
                 UpdateBusinessStatusCmd updateBusinessStatusCmd = new UpdateBusinessStatusCmd(task.getProcessInstanceId(), BusinessStatusEnum.FINISH.getStatus());
                 managementService.executeCommand(updateBusinessStatusCmd);
-                if (processHandler != null) {
-                    processHandler.handleProcess(processInstance.getBusinessKey(), BusinessStatusEnum.FINISH.getStatus(), false);
-                }
+                flowProcessEventHandler.processHandler(processInstance.getProcessDefinitionKey(), processInstance.getBusinessKey(),
+                    BusinessStatusEnum.FINISH.getStatus(), false);
             } else {
                 List<Task> list = QueryUtils.taskQuery(task.getProcessInstanceId()).list();
                 for (Task t : list) {
@@ -239,6 +229,7 @@ public class ActTaskServiceImpl implements IActTaskService {
             }
             return true;
         } catch (Exception e) {
+            log.error(e.getMessage(), e);
             throw new ServiceException(e.getMessage());
         }
     }
@@ -253,7 +244,7 @@ public class ActTaskServiceImpl implements IActTaskService {
      */
     @Async
     public void sendMessage(List<Task> list, String name, List<String> messageType, String message) {
-        WorkflowUtils.sendMessage(list, name, messageType, message);
+        WorkflowUtils.sendMessage(list, name, messageType, message, userService);
     }
 
     /**
@@ -269,7 +260,8 @@ public class ActTaskServiceImpl implements IActTaskService {
         String userId = String.valueOf(LoginHelper.getUserId());
         queryWrapper.eq("t.business_status_", BusinessStatusEnum.WAITING.getStatus());
         queryWrapper.eq(TenantHelper.isEnable(), "t.tenant_id_", TenantHelper.getTenantId());
-        queryWrapper.and(w1 -> w1.eq("t.assignee_", userId).or(w2 -> w2.isNull("t.assignee_").apply("exists ( select LINK.ID_ from ACT_RU_IDENTITYLINK LINK where LINK.TASK_ID_ = t.ID_ and LINK.TYPE_ = 'candidate' " + "and (LINK.USER_ID_ = {0} or ( LINK.GROUP_ID_ IN " + getInParam(roleIds) + " ) ))", userId)));
+        String ids = StreamUtils.join(roleIds, x -> "'" + x + "'");
+        queryWrapper.and(w1 -> w1.eq("t.assignee_", userId).or(w2 -> w2.isNull("t.assignee_").apply("exists ( select LINK.ID_ from ACT_RU_IDENTITYLINK LINK where LINK.TASK_ID_ = t.ID_ and LINK.TYPE_ = 'candidate' and (LINK.USER_ID_ = {0} or ( LINK.GROUP_ID_ IN ({1}) ) ))", userId, ids)));
         if (StringUtils.isNotBlank(taskBo.getName())) {
             queryWrapper.like("t.name_", taskBo.getName());
         }
@@ -287,7 +279,7 @@ public class ActTaskServiceImpl implements IActTaskService {
             List<WfNodeConfigVo> wfNodeConfigVoList = wfNodeConfigService.selectByDefIds(processDefinitionIds);
             for (TaskVo task : taskList) {
                 task.setBusinessStatusName(BusinessStatusEnum.findByStatus(task.getBusinessStatus()));
-                task.setParticipantVo(WorkflowUtils.getCurrentTaskParticipant(task.getId()));
+                task.setParticipantVo(WorkflowUtils.getCurrentTaskParticipant(task.getId(), userService));
                 task.setMultiInstance(WorkflowUtils.isMultiInstance(task.getProcessDefinitionId(), task.getTaskDefinitionKey()) != null);
                 if (CollUtil.isNotEmpty(wfNodeConfigVoList)) {
                     wfNodeConfigVoList.stream().filter(e -> e.getDefinitionId().equals(task.getProcessDefinitionId()) && FlowConstant.TRUE.equals(e.getApplyUserTask())).findFirst().ifPresent(task::setWfNodeConfigVo);
@@ -296,19 +288,6 @@ public class ActTaskServiceImpl implements IActTaskService {
             }
         }
         return TableDataInfo.build(page);
-    }
-
-    private String getInParam(List<String> param) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("(");
-        for (int i = 0; i < param.size(); i++) {
-            sb.append("'").append(param.get(i)).append("'");
-            if (i != param.size() - 1) {
-                sb.append(",");
-            }
-        }
-        sb.append(")");
-        return sb.toString();
     }
 
     /**
@@ -352,7 +331,7 @@ public class ActTaskServiceImpl implements IActTaskService {
                     });
                 }
                 taskVo.setAssignee(StringUtils.isNotBlank(task.getAssignee()) ? Long.valueOf(task.getAssignee()) : null);
-                taskVo.setParticipantVo(WorkflowUtils.getCurrentTaskParticipant(task.getId()));
+                taskVo.setParticipantVo(WorkflowUtils.getCurrentTaskParticipant(task.getId(), userService));
                 taskVo.setMultiInstance(WorkflowUtils.isMultiInstance(task.getProcessDefinitionId(), task.getTaskDefinitionKey()) != null);
                 if (CollUtil.isNotEmpty(wfNodeConfigVoList)) {
                     wfNodeConfigVoList.stream().filter(e -> e.getDefinitionId().equals(task.getProcessDefinitionId()) && FlowConstant.TRUE.equals(e.getApplyUserTask())).findFirst().ifPresent(taskVo::setWfNodeConfigVo);
@@ -470,8 +449,8 @@ public class ActTaskServiceImpl implements IActTaskService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean delegateTask(DelegateBo delegateBo) {
-        TaskQuery query = QueryUtils.taskQuery();
-        TaskEntity task = (TaskEntity) query.taskId(delegateBo.getTaskId()).taskCandidateOrAssigned(String.valueOf(LoginHelper.getUserId())).singleResult();
+        Task task = WorkflowUtils.getTaskByCurrentUser(delegateBo.getTaskId());
+
         if (ObjectUtil.isEmpty(task)) {
             throw new ServiceException(FlowConstant.MESSAGE_CURRENT_TASK_IS_NULL);
         }
@@ -487,7 +466,7 @@ public class ActTaskServiceImpl implements IActTaskService {
             taskService.complete(newTask.getId());
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error(e.getMessage(), e);
             throw new ServiceException(e.getMessage());
         }
     }
@@ -527,10 +506,9 @@ public class ActTaskServiceImpl implements IActTaskService {
                 runtimeService.updateBusinessStatus(task.getProcessInstanceId(), BusinessStatusEnum.TERMINATION.getStatus());
                 runtimeService.deleteProcessInstance(task.getProcessInstanceId(), StrUtil.EMPTY);
             }
-            FlowProcessEventHandler processHandler = flowEventStrategy.getProcessHandler(historicProcessInstance.getProcessDefinitionKey());
-            if (processHandler != null) {
-                processHandler.handleProcess(historicProcessInstance.getBusinessKey(), BusinessStatusEnum.TERMINATION.getStatus(), false);
-            }
+            //流程终止监听
+            flowProcessEventHandler.processHandler(historicProcessInstance.getProcessDefinitionKey(),
+                historicProcessInstance.getBusinessKey(), BusinessStatusEnum.TERMINATION.getStatus(), false);
             return true;
         } catch (Exception e) {
             throw new ServiceException(e.getMessage());
@@ -544,7 +522,7 @@ public class ActTaskServiceImpl implements IActTaskService {
      */
     @Override
     public boolean transferTask(TransmitBo transmitBo) {
-        Task task = QueryUtils.taskQuery().taskId(transmitBo.getTaskId()).taskCandidateOrAssigned(String.valueOf(LoginHelper.getUserId())).singleResult();
+        Task task = WorkflowUtils.getTaskByCurrentUser(transmitBo.getTaskId());
         if (ObjectUtil.isEmpty(task)) {
             throw new ServiceException(FlowConstant.MESSAGE_CURRENT_TASK_IS_NULL);
         }
@@ -558,7 +536,7 @@ public class ActTaskServiceImpl implements IActTaskService {
             taskService.setAssignee(task.getId(), transmitBo.getUserId());
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error(e.getMessage(), e);
             throw new ServiceException(e.getMessage());
         }
     }
@@ -606,7 +584,7 @@ public class ActTaskServiceImpl implements IActTaskService {
             taskService.complete(newTask.getId());
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error(e.getMessage(), e);
             throw new ServiceException(e.getMessage());
         }
     }
@@ -656,7 +634,7 @@ public class ActTaskServiceImpl implements IActTaskService {
             taskService.complete(newTask.getId());
             return true;
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error(e.getMessage(), e);
             throw new ServiceException(e.getMessage());
         }
     }
@@ -669,9 +647,9 @@ public class ActTaskServiceImpl implements IActTaskService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String backProcess(BackProcessBo backProcessBo) {
-        TaskQuery query = QueryUtils.taskQuery();
         String userId = String.valueOf(LoginHelper.getUserId());
-        Task task = query.taskId(backProcessBo.getTaskId()).taskCandidateOrAssigned(userId).singleResult();
+        Task task = WorkflowUtils.getTaskByCurrentUser(backProcessBo.getTaskId());
+
         if (ObjectUtil.isEmpty(task)) {
             throw new ServiceException(FlowConstant.MESSAGE_CURRENT_TASK_IS_NULL);
         }
@@ -705,7 +683,9 @@ public class ActTaskServiceImpl implements IActTaskService {
             MultiInstanceVo multiInstance = WorkflowUtils.isMultiInstance(task.getProcessDefinitionId(), task.getTaskDefinitionKey());
             if (multiInstance == null && taskList.size() > 1) {
                 List<Task> tasks = StreamUtils.filter(taskList, e -> !e.getTaskDefinitionKey().equals(task.getTaskDefinitionKey()));
-                actHiTaskinstMapper.deleteBatchIds(StreamUtils.toList(tasks, Task::getId));
+                if (CollUtil.isNotEmpty(tasks)) {
+                    actHiTaskinstMapper.deleteByIds(StreamUtils.toList(tasks, Task::getId));
+                }
             }
 
 
@@ -728,14 +708,13 @@ public class ActTaskServiceImpl implements IActTaskService {
             WfTaskBackNode wfTaskBackNode = wfTaskBackNodeService.getListByInstanceIdAndNodeId(task.getProcessInstanceId(), backProcessBo.getTargetActivityId());
             if (ObjectUtil.isNotNull(wfTaskBackNode) && wfTaskBackNode.getOrderNo() == 0) {
                 runtimeService.updateBusinessStatus(processInstanceId, BusinessStatusEnum.BACK.getStatus());
-                FlowProcessEventHandler processHandler = flowEventStrategy.getProcessHandler(processInstance.getProcessDefinitionKey());
-                if (processHandler != null) {
-                    processHandler.handleProcess(processInstance.getBusinessKey(), BusinessStatusEnum.BACK.getStatus(), false);
-                }
+                flowProcessEventHandler.processHandler(processInstance.getProcessDefinitionKey(),
+                    processInstance.getBusinessKey(), BusinessStatusEnum.BACK.getStatus(), false);
             }
             //删除驳回后的流程节点
             wfTaskBackNodeService.deleteBackTaskNode(processInstanceId, backProcessBo.getTargetActivityId());
         } catch (Exception e) {
+            log.error(e.getMessage(), e);
             throw new ServiceException(e.getMessage());
         }
         return task.getProcessInstanceId();
@@ -756,6 +735,7 @@ public class ActTaskServiceImpl implements IActTaskService {
                 taskService.setAssignee(task.getId(), userId);
             }
         } catch (Exception e) {
+            log.error("修改失败：" + e.getMessage(), e);
             throw new ServiceException("修改失败：" + e.getMessage());
         }
         return true;
