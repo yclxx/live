@@ -1,17 +1,20 @@
-# http://editorconfig.org
+# 告诉EditorConfig插件，这是根文件，不用继续往上查找
 root = true
 
-# 空格替代Tab缩进在各种编辑工具下效果一致
+# 匹配全部文件
 [*]
+# 缩进风格，可选space、tab
 indent_style = space
-indent_size = 4
-charset = utf-8
-end_of_line = lf
-trim_trailing_whitespace = true
-insert_final_newline = true
-
-[*.{json,yml,yaml}]
+# 缩进的空格数
 indent_size = 2
+# 设置字符集
+charset = utf-8
+# 结尾换行符，可选lf、cr、crlf
+end_of_line = lf
+# 在文件结尾插入新行
+trim_trailing_whitespace = true
+# 删除一行中的前后空格
+insert_final_newline = true
 
 [*.md]
 insert_final_newline = false
