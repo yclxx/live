@@ -8,8 +8,8 @@ spring.boot.admin.client:
     metadata:
       username: ${spring.boot.admin.client.username}
       userpassword: ${spring.boot.admin.client.password}
-  username: ruoyi
-  password: 123456
+  username: @monitor.username@
+  password: @monitor.password@
 
 --- # snail-job 配置
 snail-job:
@@ -25,6 +25,8 @@ snail-job:
   namespace: ${spring.profiles.active}
   # 随主应用端口飘逸
   port: 2${server.port}
+  # 客户端ip指定
+  host:
 
 --- # 数据源配置
 spring:
