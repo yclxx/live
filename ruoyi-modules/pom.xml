@@ -16,6 +16,7 @@
         <module>ruoyi-system</module>
         <module>ruoyi-workflow</module>
         <module>live</module>
+        <module>boss</module>
     </modules>
 
     <artifactId>ruoyi-modules</artifactId>

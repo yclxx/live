@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.utils.SpringUtils;
 import org.dromara.common.core.utils.StringUtils;
 
@@ -21,6 +22,7 @@ import java.util.List;
  *
  * @author 芋道源码
  */
+@Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class JsonUtils {
 
@@ -52,6 +54,7 @@ public class JsonUtils {
         try {
             return OBJECT_MAPPER.writeValueAsString(object);
         } catch (JsonProcessingException e) {
+            log.info("转json异常，对象信息：{},类型：{}", object, object.getClass().getName());
             throw new RuntimeException(e);
         }
     }

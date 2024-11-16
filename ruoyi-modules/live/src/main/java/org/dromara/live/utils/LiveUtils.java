@@ -1,6 +1,7 @@
 package org.dromara.live.utils;
 
 import cn.hutool.core.util.URLUtil;
+import cn.hutool.crypto.SecureUtil;
 import cn.hutool.http.HttpUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
@@ -179,8 +180,10 @@ public class LiveUtils {
 //        // f116 总市值 f117 流通市值
 //        log.info("返回结果：{}", gpMarketValueResult.getData());
 
-        List<GpInfoVo> gpInfoVoList = getGpInfoVoList("603501", "");
-        log.info("第一条{}", gpInfoVoList.getLast());
+//        List<GpInfoVo> gpInfoVoList = getGpInfoVoList("603501", "");
+//        log.info("第一条{}", gpInfoVoList.getLast());
+        System.out.println(SecureUtil.sha256("e10adc3949ba59abbe56e057f20f883e"));
+        System.out.println(SecureUtil.sha256("e10adc3949ba59abbe56e057f20f883e"));
     }
 
     public static GpMarketValue getGpMarketValue(String code) {
