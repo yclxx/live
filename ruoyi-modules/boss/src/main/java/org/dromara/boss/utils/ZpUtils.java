@@ -1,15 +1,18 @@
 package org.dromara.boss.utils;
 
+import cn.hutool.core.util.NumberUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpUtil;
 import cn.hutool.http.Method;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.boss.domain.vo.ZpAddResultDataVo;
 import org.dromara.boss.domain.vo.ZpDetailInfoVo;
 import org.dromara.boss.domain.vo.ZpListDataVo;
 import org.dromara.boss.domain.vo.ZpResultVo;
 import org.dromara.common.core.exception.ServiceException;
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.json.utils.JsonUtils;
 
 import java.util.HashMap;
@@ -22,6 +25,8 @@ import java.util.Map;
  */
 @Slf4j
 public class ZpUtils {
+    @Getter
+    private boolean initHeaders = false;
     /**
      * 请求头，全局配置
      */
@@ -165,7 +170,54 @@ public class ZpUtils {
         }
         if (ObjectUtil.isNotEmpty(headers)) {
             instance.setHeaders(headers);
+            instance.initHeaders = true;
         }
         return instance;
+    }
+
+    public boolean checkSalary(String salaryDesc, Long minSalary, Long maxSalary) {
+        if (StringUtils.isBlank(salaryDesc) || !salaryDesc.contains("-")) {
+            log.info("薪资{}不符合预期，跳过", salaryDesc);
+            return false;
+        }
+        String[] split = salaryDesc.split("-");
+        // 最低薪资
+        String minSalaryStr = split[0];
+        // 最高薪资 可能是 15K·13薪
+        String maxSalaryStr = split[1];
+        if (!maxSalaryStr.contains("K")) {
+            log.info("薪资单位未识别处理，{}", salaryDesc);
+            return false;
+        }
+        // 截取K前面的数字
+        maxSalaryStr = maxSalaryStr.substring(0, maxSalaryStr.indexOf("K"));
+        if (!NumberUtil.isInteger(minSalaryStr) || !NumberUtil.isInteger(maxSalaryStr)) {
+            log.info("薪资{}不符合预期，跳过", salaryDesc);
+            return false;
+        }
+        // 转整为int
+        int minSalaryInt = Integer.parseInt(minSalaryStr);
+        int maxSalaryInt = Integer.parseInt(maxSalaryStr);
+        if (minSalaryInt < minSalary && maxSalaryInt < maxSalary) {
+            log.info("薪资{}不符合预期，跳过", salaryDesc);
+            return false;
+        }
+        return true;
+    }
+
+    public boolean checkPositionName(String positionName, String jobPositionName) {
+        if (StringUtils.isNotBlank(positionName)) {
+            boolean flag = true;
+            for (String str : positionName.split(",")) {
+                if (StringUtils.isNotBlank(str) && jobPositionName.contains(str)) {
+                    flag = false;
+                }
+            }
+            if (flag) {
+                log.info("岗位不是{}，跳过,{}", positionName, jobPositionName);
+                return false;
+            }
+        }
+        return true;
     }
 }

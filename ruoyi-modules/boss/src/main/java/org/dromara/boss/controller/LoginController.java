@@ -7,8 +7,10 @@ import cn.hutool.http.HttpUtil;
 import cn.hutool.http.Method;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.boss.domain.bo.InitZpUtilsBo;
 import org.dromara.boss.domain.vo.ZpRandKeyResultVo;
 import org.dromara.boss.domain.vo.ZpResultVo;
+import org.dromara.boss.utils.ZpUtils;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.json.utils.JsonUtils;
 import org.springframework.validation.annotation.Validated;
@@ -27,6 +29,15 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequestMapping("/boss")
 public class LoginController {
+
+    /**
+     * 初始化参数
+     */
+    @PostMapping("/init")
+    public R<Void> init(@RequestBody InitZpUtilsBo bo) {
+        ZpUtils.getInstance(bo.getHeaders());
+        return R.ok();
+    }
 
     /**
      * 查询活动管理列表

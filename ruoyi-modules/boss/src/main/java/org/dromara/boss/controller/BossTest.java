@@ -22,7 +22,7 @@ import java.util.Map;
  * @date 2024/11/9 16:46
  */
 @Slf4j
-public class Test {
+public class BossTest {
 
     //    private static final List<String> activityTimes = List.of(new String[]{"刚刚活跃", "今日活跃", "昨日活跃", "3日内活跃"});
     private static final List<String> activityTimes = List.of(new String[]{"刚刚活跃", "今日活跃", "昨日活跃"});
