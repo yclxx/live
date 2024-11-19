@@ -5,17 +5,16 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.http.HttpRequest;
 import cn.hutool.http.HttpUtil;
 import cn.hutool.http.Method;
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.dromara.boss.domain.vo.ZpAddResultDataVo;
-import org.dromara.boss.domain.vo.ZpDetailInfoVo;
-import org.dromara.boss.domain.vo.ZpListDataVo;
-import org.dromara.boss.domain.vo.ZpResultVo;
+import org.dromara.boss.domain.vo.*;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.json.utils.JsonUtils;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,11 +32,38 @@ public class ZpUtils {
     private Map<String, String> headers;
     private static volatile ZpUtils instance;
 
+    private final List<String> resumeBeforeKeyword = List.of(new String[]{"发"});
+
     private ZpUtils() {
+    }
+
+    public static ZpUtils getInstance() {
+        return getInstance(null);
+    }
+
+    public static ZpUtils getInstance(Map<String, String> headers) {
+        if (null == instance) {
+            synchronized (ZpUtils.class) {
+                if (null == instance) {
+                    instance = new ZpUtils();
+                }
+            }
+        }
+        if (ObjectUtil.isNotEmpty(headers)) {
+            instance.setHeaders(headers);
+            instance.initHeaders = true;
+        }
+        return instance;
     }
 
     private void setHeaders(Map<String, String> headers) {
         this.headers = headers;
+    }
+
+    public ZpUserInfoVo queryUserInfo(boolean showLog) {
+        String url = "https://www.zhipin.com/wapi/zpuser/wap/getUserInfo.json";
+
+        return sendHttpRequest(Method.GET, url, null, ZpUserInfoVo.class, showLog);
     }
 
     /**
@@ -47,7 +73,7 @@ public class ZpUtils {
      * @param page            页码
      * @return 招聘列表
      */
-    public ZpListDataVo queryZpList(String encryptExpectId, Integer page) {
+    public ZpListDataVo queryZpList(String encryptExpectId, Integer page, boolean showLog) {
         // 请求地址
         String url = "https://www.zhipin.com/wapi/zpgeek/pc/recommend/job/list.json";
         // ?city=&experience=&payType=&partTime=&degree=&industry=&scale=&salary=&jobType=
@@ -66,10 +92,17 @@ public class ZpUtils {
         params.put("page", page);
         params.put("pageSize", 15);
 
-        return sendHttpRequest(Method.GET, url, params, ZpListDataVo.class);
+        return sendHttpRequest(Method.GET, url, params, ZpListDataVo.class, showLog);
     }
 
-    public ZpDetailInfoVo queryZpInfoVo(String securityId, String lid) {
+    /**
+     * 查询招聘详情
+     *
+     * @param securityId 安全id
+     * @param lid        lid
+     * @return 招聘详情
+     */
+    public ZpDetailInfoVo queryZpInfoVo(String securityId, String lid, boolean showLog) {
         // 请求地址
         // https://www.zhipin.com/wapi/zpgeek/job/detail.json
         // 参数
@@ -98,10 +131,18 @@ public class ZpUtils {
         params.put("securityId", securityId);
         params.put("lid", lid);
 
-        return sendHttpRequest(Method.GET, url, params, ZpDetailInfoVo.class);
+        return sendHttpRequest(Method.GET, url, params, ZpDetailInfoVo.class, showLog);
     }
 
-    public ZpAddResultDataVo addZp(String securityId, String jobId, String lid) {
+    /**
+     * 发起沟通
+     *
+     * @param securityId 安全id
+     * @param jobId      工作id
+     * @param lid        lid
+     * @return 沟通结果
+     */
+    public ZpAddResultDataVo addZp(String securityId, String jobId, String lid, boolean showLog) {
         // 返回结果
         //        "showGreeting": true,
         //        "greeting": "您好，我对这个岗位以及贵公司都很有兴趣，也觉得岗位非常适合自己，相信自己也能为贵公司提供价值。可以查看我的简历，如果您觉得合适，可以随时联系我，感谢",
@@ -122,7 +163,7 @@ public class ZpUtils {
         params.put("jobId", jobId);
 
         try {
-            return sendHttpRequest(Method.POST, url, params, ZpAddResultDataVo.class);
+            return sendHttpRequest(Method.POST, url, params, ZpAddResultDataVo.class, showLog);
         } catch (Exception e) {
             log.error("投递失败，", e);
             return null;
@@ -130,49 +171,177 @@ public class ZpUtils {
     }
 
     /**
-     * 发送get 请求
+     * 获取沟通列表
      *
-     * @param method 请求方式
-     * @param url    请求地址
-     * @param params 请求参数
-     * @param type   返回数据类型
-     * @return 返回结果
+     * @return {"foldText":"以上是30天内联系人",
+     * "filterEncryptIdList":[],
+     * "friendList":[{"friendId":683434327,"friendSource":0,"encryptFriendId":"379b084bf0ed28020Xx53965E1BX","name":"杨茜","updateTime":1731671391000,"brandName":"纬创软件"}]
+     * }
      */
-    private <T> T sendHttpRequest(Method method, String url, Map<String, Object> params, Class<T> type) {
-        HttpRequest request = HttpUtil.createRequest(method, url);
-        request.addHeaders(headers);
+    public ZpMsgListResultVo queryMsgList(boolean showLog) {
+        String url = "https://www.zhipin.com/wapi/zprelation/friend/geekFilterByLabel";
 
-        String result = request.form(params).execute().body();
-        log.info("请求url：{}，请求参数：{}，返回结果：{}", url, params, result);
+        Map<String, Object> params = new HashMap<>();
+        params.put("labelId", 0);
 
-        ZpResultVo zpResult = JsonUtils.parseObject(result, ZpResultVo.class);
-
-        if (null == zpResult) {
-            throw new ServiceException("请求boos直聘接口失败，返回结果为空");
-        }
-        if (0 != zpResult.getCode()) {
-            throw new ServiceException(zpResult.getMessage());
-        }
-        return zpResult.getZpData(type);
+        return sendHttpRequest(Method.GET, url, params, ZpMsgListResultVo.class, showLog);
     }
 
-    public static ZpUtils getInstance() {
-        return getInstance(null);
+    /**
+     * 获取消息详细列表
+     *
+     * @param friendIds 消息id 字符串，英文逗号分隔
+     */
+    public List<ZpMsgInfoListVo> queryMsgInfoList(String friendIds, boolean showLog) {
+        String url = "https://www.zhipin.com/wapi/zprelation/friend/getGeekFriendList.json";
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("friendIds", friendIds);
+
+        Map<String, List<ZpMsgInfoListVo>> resultMap = sendHttpRequest(Method.GET, url, params, new TypeReference<>() {
+        }, showLog);
+        return resultMap.get("result");
     }
 
-    public static ZpUtils getInstance(Map<String, String> headers) {
-        if (null == instance) {
-            synchronized (ZpUtils.class) {
-                if (null == instance) {
-                    instance = new ZpUtils();
-                }
-            }
+    /**
+     * 聊天列表 boss信息
+     *
+     * @param bossId     加密bossId
+     * @param securityId 安全Id
+     * @param showLog    是否打印日志
+     * @return boss信息
+     */
+    public ZpMsgBossDataResultVo queryBossData(String bossId, String securityId, boolean showLog) {
+        // https://www.zhipin.com/wapi/zpchat/geek/getBossData?bossId=b1721a63cebb851d1nR-3t60E1NY&bossSource=0&securityId=8b5u1ZZidYzg--o18QYaQPxATFlas7HFdnqKRSQM1WGFv8NybOmlsxTA3lldOboPrWRt58HknFIgwW4bgSEhXL-LkApKwfm1sieNlKyfdyZpaSQvaYUmSPkt9lpJfD2A52jGqXCS7NoWtLRmF7tM1jvdZsaUg2md_gpoBas-mVere18Kk7kqHw~~
+
+        String url = "https://www.zhipin.com/wapi/zpchat/geek/getBossData";
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("bossId", bossId);
+        params.put("bossSource", 0);
+        params.put("securityId", securityId);
+
+        return sendHttpRequest(Method.GET, url, params, ZpMsgBossDataResultVo.class, showLog);
+    }
+
+    public List<ZpMsgHistoryListVo> queryMsgInfo(String bossId, String securityId, boolean showLog) {
+        // https://www.zhipin.com/wapi/zpchat/geek/historyMsg?bossId=12062437a81cf1c00XJ82dq5GFJR&groupId=12062437a81cf1c00XJ82dq5GFJR&maxMsgId=0&c=20&page=1&src=0&securityId=hf51ZwW2x3HOu-41qsucxMSeRownwvAwGYuu5NSfBLYxQYp5NSP3qiYOpkQAW4yPJPAHg3n5o0ypAdIikS9tcfnvUhqjBDmMRD8fHoyyfRqKbpRfAyCeCq8jbVLkgKbumBpAtl4gt2GQCwW2EkdWwbz2J2ZETbZQtTuffrF_dkEh0XHTiXZ19To~&loading=true&_t=1731831031528
+        String url = "https://www.zhipin.com/wapi/zpchat/geek/historyMsg";
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("bossId", bossId);
+        params.put("groupId", bossId);
+        params.put("maxMsgId", 0);
+        params.put("c", 20);
+        params.put("page", 1);
+        params.put("src", 0);
+        params.put("securityId", securityId);
+        params.put("loading", true);
+        params.put("_t", System.currentTimeMillis());
+
+        ZpMsgInfoResultVo zpMsgInfoResultVo = sendHttpRequest(Method.GET, url, params, ZpMsgInfoResultVo.class, showLog);
+
+        return zpMsgInfoResultVo.getMessages();
+    }
+
+    /**
+     * 检查是否可以发送简历
+     *
+     * @param bossId     明文bossId 39327099
+     * @param securityId 安全Id
+     */
+    public ZpResumeListResultVo checkSendResume(Long bossId, String securityId, boolean showLog) {
+        // 发送简历
+        // 三个请求
+        // post
+        // https://www.zhipin.com/wapi/zpCommon/actionLog/common.json
+        // p 为 bossId
+        // 参数：ba: {"action":"chat-resume-send-click","p":"39327099"}
+        // 返回：{"code":0,"message":"Success","zpData":true}
+
+        String commonUrl = "https://www.zhipin.com/wapi/zpCommon/actionLog/common.json";
+        Map<String, Object> commonParams = new HashMap<>();
+        commonParams.put("ba", "{\"action\":\"chat-resume-send-click\",\"p\":\"" + bossId + "\"}");
+
+        Boolean b = sendHttpRequest(Method.POST, commonUrl, commonParams, Boolean.class, showLog);
+        if (!b) {
+            throw new RuntimeException("检查是否可以发送简历失败");
         }
-        if (ObjectUtil.isNotEmpty(headers)) {
-            instance.setHeaders(headers);
-            instance.initHeaders = true;
-        }
-        return instance;
+
+        // post
+        // https://www.zhipin.com/wapi/zpchat/exchange/test
+        // 参数：securityId: rQBRf3x7Q9jxj-V1LNTb_3OK_9ZPZc2bKx-_kRQLTdr1Yd9RaBEQDil1oG0MJe3TfYIvzMyJh-n4Lr0qaeaQhGVLBtWnFCPhss0X3kSmGn6r777fRFrIqms~
+        //      type: 3
+        // 返回：{"code":0,"message":"Success","zpData":{"alertType":0,"type":3,"status":0}}
+
+        String exchangeUrl = "https://www.zhipin.com/wapi/zpchat/exchange/test";
+        Map<String, Object> exchangeParams = new HashMap<>();
+        exchangeParams.put("securityId", securityId);
+        exchangeParams.put("type", 3);
+
+        sendHttpRequest(Method.POST, exchangeUrl, exchangeParams, Object.class, showLog);
+
+        // get
+        // https://www.zhipin.com/wapi/zpgeek/resume/attachment/checkbox.json
+        // 参数：无
+        // 返回：{
+        //    "code": 0,
+        //    "message": "Success",
+        //    "zpData": {
+        //        "supportVideoResume": false,
+        //        "resumeList": [
+        //            {
+        //                "resumeId": "376961d20775af2c1nB62Nq9EVpUwI-4VPOe",
+        //                "showName": "谢茜-JAVA.pdf",
+        //                "resumeSize": 378778,
+        //                "resumeSizeDesc": "369.9KB",
+        //                "suffixName": "pdf",
+        //                "annexType": 0,
+        //                "uploadTime": "2024.10.20 15:27",
+        //                "parserId": null,
+        //                "syncStatus": 0,
+        //                "previewType": 1,
+        //                "restricted": false,
+        //                "cvId": "",
+        //                "securityStatus": 0,
+        //                "restrictedDays": -1,
+        //                "target": 0,
+        //                "nlpParserType": 0,
+        //                "pdf2Image": false
+        //            }
+        //        ],
+        //        "videoResumeList": [],
+        //        "supportAnnexType": false,
+        //        "supportCommonResume": true,
+        //        "showUploadBtnType": false,
+        //        "complete": true,
+        //        "maxCount": 3,
+        //        "resumeCount": 1
+        //    }
+        //}
+
+        String attachmentUrl = "https://www.zhipin.com/wapi/zpgeek/resume/attachment/checkbox.json";
+        return sendHttpRequest(Method.GET, attachmentUrl, null, ZpResumeListResultVo.class, showLog);
+    }
+
+    public void sendResume(String securityId, String encryptResumeId) {
+        // 发送简历
+        // post
+        // https://www.zhipin.com/wapi/zpchat/exchange/request
+        // 参数：securityId: rQBRf3x7Q9jxj-V1LNTb_3OK_9ZPZc2bKx-_kRQLTdr1Yd9RaBEQDil1oG0MJe3TfYIvzMyJh-n4Lr0qaeaQhGVLBtWnFCPhss0X3kSmGn6r777fRFrIqms~
+        //      type: 3
+        //      encryptResumeId: 376961d20775af2c1nB62Nq9EVpUwI-4VPOe
+        //      mid:
+        // 返回：{"code":0,"message":"Success","zpData":{"type":3,"status":0}}
+
+        String exchangeUrl = "https://www.zhipin.com/wapi/zpchat/exchange/request";
+        Map<String, Object> exchangeParams = new HashMap<>();
+        exchangeParams.put("securityId", securityId);
+        exchangeParams.put("type", 3);
+        exchangeParams.put("encryptResumeId", encryptResumeId);
+        exchangeParams.put("mid", "");
+
+        sendHttpRequest(Method.POST, exchangeUrl, exchangeParams, Object.class, true);
     }
 
     public boolean checkSalary(String salaryDesc, Long minSalary, Long maxSalary) {
@@ -219,5 +388,79 @@ public class ZpUtils {
             }
         }
         return true;
+    }
+
+    public boolean checkMsgSendResume(String msg) {
+        if (StringUtils.isBlank(msg)) {
+            return false;
+        }
+        if (!msg.contains("简历")) {
+            return false;
+        }
+        // 截取简历前面的字符串
+        String resumeName = StringUtils.substringBefore(msg, "简历");
+
+        for (String keyword : resumeBeforeKeyword) {
+            if (resumeName.contains(keyword)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 发送get 请求
+     *
+     * @param method 请求方式
+     * @param url    请求地址
+     * @param params 请求参数
+     * @param type   返回数据类型
+     * @return 返回结果
+     */
+    private <T> T sendHttpRequest(Method method, String url, Map<String, Object> params, Class<T> type, boolean showLog) {
+        ZpResultVo zpResult = baseRequest(method, url, params, showLog);
+
+        checkResponse(zpResult);
+
+        return zpResult.getZpData(type);
+    }
+
+    /**
+     * 发送get 请求
+     *
+     * @param method        请求方式
+     * @param url           请求地址
+     * @param params        请求参数
+     * @param typeReference 返回数据类型
+     * @return 返回结果
+     */
+    private <T> T sendHttpRequest(Method method, String url, Map<String, Object> params, TypeReference<T> typeReference, boolean showLog) {
+        ZpResultVo zpResult = baseRequest(method, url, params, showLog);
+
+        checkResponse(zpResult);
+
+        return zpResult.getZpData(typeReference);
+    }
+
+    private ZpResultVo baseRequest(Method method, String url, Map<String, Object> params, boolean showLog) {
+        HttpRequest request = HttpUtil.createRequest(method, url);
+        request.addHeaders(headers);
+
+        String result = request.form(params).execute().body();
+        if (showLog) {
+            log.info("请求url：{}，请求参数：{}，返回结果：{}", url, params, result);
+        }
+
+        return JsonUtils.parseObject(result, ZpResultVo.class);
+    }
+
+    private void checkResponse(ZpResultVo zpResult) {
+        if (null == zpResult) {
+            throw new ServiceException("请求boos直聘接口失败，返回结果为空");
+        }
+        if (0 != zpResult.getCode()) {
+            throw new ServiceException(zpResult.getMessage());
+        }
     }
 }

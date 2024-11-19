@@ -180,7 +180,7 @@ public class ApplyLogServiceImpl implements IApplyLogService, IApplyExecuteServi
 
             long applyCount = 0;
             for (int i = 1; i <= applyJobVo.getPages(); i++) {
-                ZpListDataVo zpData = instance.queryZpList(applyJobVo.getEncryptExpectId(), i);
+                ZpListDataVo zpData = instance.queryZpList(applyJobVo.getEncryptExpectId(), i, true);
                 if (null == zpData || ObjectUtil.isEmpty(zpData.getJobList())) {
                     log.info("获取招聘列表失败，返回结果为空");
                     break;
@@ -204,11 +204,11 @@ public class ApplyLogServiceImpl implements IApplyLogService, IApplyExecuteServi
                     }
 
                     // 休眠一下，防止被当成机器人
-                    int sleepTime = (RandomUtil.getRandom().nextInt(10) + 20) * 1000;
+                    int sleepTime = (RandomUtil.getRandom().nextInt(10) + 10) * 1000;
                     ThreadUtil.sleep(sleepTime);
 
                     // 查询招聘详情
-                    ZpDetailInfoVo infoData = instance.queryZpInfoVo(zpJobInfoVo.getSecurityId(), zpJobInfoVo.getLid());
+                    ZpDetailInfoVo infoData = instance.queryZpInfoVo(zpJobInfoVo.getSecurityId(), zpJobInfoVo.getLid(), true);
                     log.info("获取招聘详细信息成功：{}", infoData);
 
                     // 判断招聘岗位是否是JAVA
@@ -236,10 +236,10 @@ public class ApplyLogServiceImpl implements IApplyLogService, IApplyExecuteServi
                     ThreadUtil.sleep(sleepTime2);
 
                     // 投递
-                    ZpAddResultDataVo zpAddResultDataVo = instance.addZp(infoData.getSecurityId(), infoData.getJobInfo().getEncryptId(), infoData.getLid());
+                    ZpAddResultDataVo zpAddResultDataVo = instance.addZp(infoData.getSecurityId(), infoData.getJobInfo().getEncryptId(), infoData.getLid(), true);
                     log.info("投递公司：{}，返回结果：{}", infoData.getBossInfo().getBrandName(), zpAddResultDataVo);
 
-                    if (zpAddResultDataVo.getShowGreeting()) {
+                    if (null != zpAddResultDataVo && zpAddResultDataVo.getShowGreeting()) {
                         // 记录沟通记录
                         ApplyLog applyLog = getApplyLog(applyJobId, infoData);
                         baseMapper.insert(applyLog);

@@ -1,6 +1,7 @@
 package org.dromara.boss.domain.vo;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.Data;
 import org.dromara.common.json.utils.JsonUtils;
 
@@ -22,5 +23,13 @@ public class ZpResultVo {
         }
         String json = JsonUtils.toJsonString(zpData);
         return JsonUtils.parseObject(json, clazz);
+    }
+
+    public <T> T getZpData(TypeReference<T> typeReference) {
+        if (null == zpData) {
+            return null;
+        }
+        String json = JsonUtils.toJsonString(zpData);
+        return JsonUtils.parseObject(json, typeReference);
     }
 }
