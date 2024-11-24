@@ -14,6 +14,8 @@
     <modules>
         <module>ruoyi-monitor-admin</module>
         <module>ruoyi-snailjob-server</module>
+        <module>mica-mqtt-server</module>
+        <module>mica-mqtt-client</module>
     </modules>
 
 </project>

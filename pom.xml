@@ -364,7 +364,6 @@
                 <artifactId>boss</artifactId>
                 <version>${revision}</version>
             </dependency>
-
         </dependencies>
     </dependencyManagement>
 
