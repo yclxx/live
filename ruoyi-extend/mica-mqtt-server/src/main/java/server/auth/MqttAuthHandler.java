@@ -1,9 +1,9 @@
 package server.auth;
 
 import net.dreamlu.iot.mqtt.core.server.auth.IMqttServerAuthHandler;
-import org.dromara.common.core.domain.model.LoginUser;
+import org.dromara.common.core.service.AdminTokenService;
 import org.dromara.common.core.utils.StringUtils;
-import org.dromara.common.satoken.utils.LoginHelper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.tio.core.ChannelContext;
 
@@ -14,6 +14,9 @@ import org.tio.core.ChannelContext;
  */
 @Configuration(proxyBeanMethods = false)
 public class MqttAuthHandler implements IMqttServerAuthHandler {
+
+    @Autowired
+    private AdminTokenService adminTokenService;
 
     @Override
     public boolean authenticate(ChannelContext context, String uniqueId, String clientId, String userName, String password) {
@@ -29,8 +32,12 @@ public class MqttAuthHandler implements IMqttServerAuthHandler {
         }
         // 校验token是否有效
         try {
-            LoginUser loginUser = LoginHelper.getLoginUser(password);
-            logger.info("token有效，loginUser：{}", loginUser);
+            Boolean checkToken = adminTokenService.checkToken(password);
+            if (checkToken) {
+                logger.info("token有效");
+            } else {
+                logger.error("token无效，password：{}", password);
+            }
         } catch (Exception e) {
             logger.error("鉴权失败", e);
         }
