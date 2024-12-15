@@ -23,7 +23,7 @@ public class ZpDetailInfoVo {
     private ZpDetailBrandComInfoVo brandComInfo;
     private ZpDetailOneKeyResumeInfoVo oneKeyResumeInfo;
     private ZpDetailRelationInfoVo relationInfo;
-    private String handicappedInfo;
+    private ZpDetailHandicappedInfoVo handicappedInfo;
     private ZpDetailAppendixInfoVo appendixInfo;
     private ZpDetailAtsOnlineApplyInfoVo atsOnlineApplyInfo;
 }

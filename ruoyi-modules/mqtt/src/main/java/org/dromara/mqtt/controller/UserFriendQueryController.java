@@ -1,6 +1,7 @@
 package org.dromara.mqtt.controller;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.ObjectUtil;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.domain.R;
 import org.dromara.common.core.domain.dto.UserFriendDTO;
@@ -13,6 +14,7 @@ import org.dromara.mqtt.domain.vo.UserFriendVo;
 import org.dromara.mqtt.service.IUserFriendService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -43,5 +45,17 @@ public class UserFriendQueryController extends BaseController {
         List<UserFriendDTO> userFriendDTOS = userFriendQueryService.queryListByUserIds(friendUserIds);
         // 转UserFriendQueryVo 头像翻译，脱敏等操作
         return R.ok(BeanUtil.copyToList(userFriendDTOS, UserFriendQueryVo.class));
+    }
+
+    @GetMapping("/queryUserFriendInfo/{friendUserId}")
+    public R<UserFriendQueryVo> queryUserFriendInfo(@PathVariable Long friendUserId) {
+        List<Long> friendUserIds = List.of(friendUserId);
+        // 查询用户好友
+        List<UserFriendDTO> userFriendDTOS = userFriendQueryService.queryListByUserIds(friendUserIds);
+        if (ObjectUtil.isEmpty(userFriendDTOS)) {
+            return R.ok();
+        }
+        // 转UserFriendQueryVo 头像翻译，脱敏等操作
+        return R.ok(BeanUtil.toBean(userFriendDTOS.getFirst(), UserFriendQueryVo.class));
     }
 }
